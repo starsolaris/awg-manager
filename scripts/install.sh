@@ -158,7 +158,7 @@ start_service() {
 
 # --- Проверка работоспособности ---
 health_check() {
-    # Извлечь порт из settings.json (без grep -P, совместимо с BusyBox)
+    # Daemon persists actual port in settings.json (fallback port included)
     PORT=$(sed -n 's/.*"port"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' \
         /opt/etc/awg-manager/settings.json 2>/dev/null)
     [ -z "$PORT" ] && PORT=2222
