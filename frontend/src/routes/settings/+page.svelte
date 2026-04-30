@@ -12,13 +12,16 @@
 		DnsRouteSettings,
 		IntegrationsCard,
 		SettingsFooter,
+		UsageLevelCard,
 	} from "$lib/components/settings";
+	import { setSettings as setGlobalSettings } from "$lib/stores/settings";
 	import type {
 		SystemInfo,
 		Settings,
 		UpdateInfo,
 		HydraRouteStatus,
 	} from "$lib/types";
+	import type { UsageLevel } from "$lib/types/usageLevel";
 
 	let systemInfo: SystemInfo | null = $state(null);
 	let settings = $state<Settings | null>(null);
@@ -109,6 +112,7 @@
 		saving = true;
 		try {
 			settings = await api.updateSettings({ ...settings, authEnabled: enabled });
+			setGlobalSettings(settings);
 			notifications.success(enabled ? "Авторизация включена" : "Авторизация отключена");
 		} catch {
 			notifications.error("Ошибка сохранения настроек");
@@ -125,6 +129,7 @@
 			// over plain HTTP (router LAN context), so the backend produces
 			// the UUID via crypto/rand and persists it in one round-trip.
 			settings = await api.regenerateApiKey();
+			setGlobalSettings(settings);
 			notifications.success("API ключ сгенерирован");
 		} catch {
 			notifications.error("Ошибка генерации ключа");
@@ -141,6 +146,7 @@
 				...settings,
 				logging: { ...settings.logging, enabled },
 			});
+			setGlobalSettings(settings);
 			notifications.success(enabled ? "Логирование включено" : "Логирование отключено");
 		} catch {
 			notifications.error("Ошибка сохранения настроек");
@@ -154,6 +160,7 @@
 		saving = true;
 		try {
 			settings = await api.updateSettings(settings);
+			setGlobalSettings(settings);
 			notifications.success("Настройки логирования сохранены");
 		} catch {
 			notifications.error("Ошибка сохранения настроек");
@@ -178,6 +185,7 @@
 					refreshMode: settings.dnsRoute.refreshMode || "interval",
 				},
 			});
+			setGlobalSettings(settings);
 			notifications.success(enabled ? "Автообновление подписок включено" : "Автообновление подписок отключено");
 		} catch {
 			notifications.error("Ошибка сохранения настроек");
@@ -191,6 +199,7 @@
 		saving = true;
 		try {
 			settings = await api.updateSettings(settings);
+			setGlobalSettings(settings);
 			notifications.success("Настройки автообновления сохранены");
 		} catch {
 			notifications.error("Ошибка сохранения настроек");
@@ -207,9 +216,24 @@
 				...settings,
 				updates: { ...settings.updates, checkEnabled: enabled },
 			});
+			setGlobalSettings(settings);
 			notifications.success(enabled ? "Автопроверка обновлений включена" : "Автопроверка обновлений отключена");
 		} catch {
 			notifications.error("Ошибка сохранения настроек");
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function selectUsageLevel(level: UsageLevel) {
+		if (!settings) return;
+		saving = true;
+		try {
+			settings = await api.updateSettings({ ...settings, usageLevel: level });
+			setGlobalSettings(settings);
+			notifications.success(`Уровень: ${level}`);
+		} catch {
+			notifications.error("Не удалось сохранить уровень");
 		} finally {
 			saving = false;
 		}
@@ -238,6 +262,12 @@
 			<LoadingSpinner size="md" />
 		</div>
 	{:else if settings && systemInfo}
+		<UsageLevelCard
+			value={settings.usageLevel}
+			{saving}
+			onSelect={selectUsageLevel}
+		/>
+
 		<div class="settings-grid">
 			<aside class="settings-left">
 				<SystemInfoGrid {systemInfo} />
