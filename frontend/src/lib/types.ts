@@ -1,3 +1,5 @@
+import type { UsageLevel } from './types/usageLevel';
+
 // ─────────────────────────────────────────────
 // #region Tunnels — config, state, list items
 // ─────────────────────────────────────────────
@@ -634,6 +636,7 @@ export interface Settings {
 	disableMemorySaving: boolean;
 	updates: UpdateSettings;
 	dnsRoute: DNSRouteSettings;
+	usageLevel: UsageLevel;
 	hiddenSystemTunnels?: string[];
 }
 
