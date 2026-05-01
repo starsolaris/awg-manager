@@ -131,6 +131,7 @@
         label: string;
         badge?: number | string;
         badgeTone?: 'default' | 'success' | 'warning' | 'muted';
+        separatorBefore?: boolean;
     };
 
     const TAB_TO_SUBTAB: Record<string, RoutingSubTab> = {
@@ -153,15 +154,17 @@
 
     let tabItems = $derived(
         ([
-            hydrarouteInstalled ? { id: 'hrneo', label: 'HR NEO', badge: hrRuleCount } : null,
             // NDMS dns-proxy with object-group fqdn is OS5-only — gate the
             // tab on isOS5 so OS4 routers don't see an unusable NDMS tab
             // (hydraroute users on OS4 use the HR NEO tab instead).
             isOS5 ? { id: 'dns', label: 'NDMS', badge: dnsActiveCount } : null,
             { id: 'ip', label: 'IP-адреса', badge: ipActiveCount },
-            isOS5 ? { id: 'policy', label: 'Политики доступа', badge: policyCount } : null,
             { id: 'clientvpn', label: 'VPN для устройств', badge: clientRouteCount },
-            singboxInstalled ? { id: 'singbox', label: 'Sing-box Router', badge: singboxRuleCount } : null,
+            isOS5 ? { id: 'policy', label: 'Политики доступа', badge: policyCount } : null,
+            // Visual gap separates the NDMS-stack tabs above from the
+            // sing-box / hydraroute stack below.
+            singboxInstalled ? { id: 'singbox', label: 'Sing-box Router', badge: singboxRuleCount, separatorBefore: true } : null,
+            hydrarouteInstalled ? { id: 'hrneo', label: 'HR NEO', badge: hrRuleCount, separatorBefore: !singboxInstalled } : null,
         ] as (TabItem | null)[])
             .filter((t): t is TabItem => t !== null)
             .filter((t) => tabVisible(t.id))
