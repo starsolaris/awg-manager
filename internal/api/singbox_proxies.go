@@ -1,0 +1,192 @@
+// Package api — singbox_proxies.go exposes runtime controls for sing-box
+// composite outbounds (selector / urltest / loadbalance) by relaying typed
+// requests to the upstream Clash API. The handler is kept thin: shape the
+// request, call Clash, shape the response into project-standard envelopes.
+package api
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/hoaxisr/awg-manager/internal/response"
+)
+
+// SingboxProxyMember is one member outbound surfaced to the UI for a
+// composite group. LastDelay is sourced from Clash's history[] tail;
+// 0 means "no test recorded" or "last test failed" — UI treats both
+// the same.
+type SingboxProxyMember struct {
+	Tag       string `json:"tag"`
+	Type      string `json:"type"`
+	LastDelay int    `json:"lastDelay,omitempty"`
+}
+
+// SingboxProxyGroup is one composite outbound (selector / urltest /
+// loadbalance) with its current state.
+type SingboxProxyGroup struct {
+	Tag     string               `json:"tag"`
+	Type    string               `json:"type"`
+	Now     string               `json:"now"`
+	Members []SingboxProxyMember `json:"members"`
+}
+
+// SingboxProxiesListResponse is the envelope payload for GET /list.
+type SingboxProxiesListResponse struct {
+	Groups []SingboxProxyGroup `json:"groups"`
+}
+
+// SingboxProxiesSelectRequest is the body for POST /select.
+type SingboxProxiesSelectRequest struct {
+	Group  string `json:"group"  example:"veesp-fast"`
+	Member string `json:"member" example:"vless-1"`
+}
+
+// SingboxProxiesTestRequest is the body for POST /test.
+type SingboxProxiesTestRequest struct {
+	Group   string `json:"group"`
+	URL     string `json:"url,omitempty"`
+	Timeout int    `json:"timeout,omitempty"`
+}
+
+// SingboxProxiesTestResponse — memberTag → delay (ms); 0 = unreachable.
+type SingboxProxiesTestResponse struct {
+	Delays map[string]int `json:"delays"`
+}
+
+// SingboxProxiesHandler exposes runtime controls for sing-box composite
+// outbounds by relaying typed requests to the upstream Clash API.
+//
+// Dependencies are injected as functions so tests can swap them for
+// httptest fakes:
+//   - clashBaseURL    → returns the URL prefix to call (e.g.
+//     "http://127.0.0.1:9090") — same target the
+//     existing ClashProxy uses.
+//   - knownComposites → returns the set of composite tags we own
+//     (computed from 20-router.json). The List
+//     response is filtered to this set so Clash
+//     builtins (DIRECT, GLOBAL, etc.) and member
+//     outbounds don't leak into the UI.
+type SingboxProxiesHandler struct {
+	clashBaseURL    func() string
+	knownComposites func() map[string]struct{}
+	httpClient      *http.Client
+}
+
+// NewSingboxProxiesHandler constructs the handler. httpClient may be
+// nil; in production callers pass an http.Client tuned for the local
+// loopback (short timeout, no keepalive).
+func NewSingboxProxiesHandler(clashBaseURL func() string, knownComposites func() map[string]struct{}, httpClient *http.Client) *SingboxProxiesHandler {
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 10 * time.Second}
+	}
+	return &SingboxProxiesHandler{
+		clashBaseURL:    clashBaseURL,
+		knownComposites: knownComposites,
+		httpClient:      httpClient,
+	}
+}
+
+// List godoc
+//
+//	@Summary		List sing-box composite proxy groups with live state
+//	@Description	Returns selector/urltest/loadbalance groups managed by this router with their currently active member and per-member last latency. Filtered to groups defined in 20-router.json — Clash builtins (DIRECT, GLOBAL, REJECT) are excluded.
+//	@Tags			singbox-router
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Success		200	{object}	OkResponse{data=SingboxProxiesListResponse}
+//	@Failure		405	{object}	APIErrorEnvelope
+//	@Failure		500	{object}	APIErrorEnvelope
+//	@Router			/singbox/router/proxies/list [get]
+func (h *SingboxProxiesHandler) List(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		response.MethodNotAllowed(w)
+		return
+	}
+	raw, err := h.clashGet("/proxies", "")
+	if err != nil {
+		response.InternalError(w, "clash unreachable: "+err.Error())
+		return
+	}
+	var parsed struct {
+		Proxies map[string]struct {
+			Name    string   `json:"name"`
+			Type    string   `json:"type"`
+			Now     string   `json:"now"`
+			All     []string `json:"all"`
+			History []struct {
+				Delay int `json:"delay"`
+			} `json:"history"`
+		} `json:"proxies"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		response.InternalError(w, "parse clash response: "+err.Error())
+		return
+	}
+
+	known := h.knownComposites()
+	var groups []SingboxProxyGroup
+	for _, p := range parsed.Proxies {
+		if _, ok := known[p.Name]; !ok {
+			continue
+		}
+		t := strings.ToLower(p.Type)
+		if t != "selector" && t != "urltest" && t != "loadbalance" {
+			continue
+		}
+		members := make([]SingboxProxyMember, 0, len(p.All))
+		for _, memberTag := range p.All {
+			m := SingboxProxyMember{Tag: memberTag}
+			if mem, ok := parsed.Proxies[memberTag]; ok {
+				m.Type = strings.ToLower(mem.Type)
+				if len(mem.History) > 0 {
+					m.LastDelay = mem.History[len(mem.History)-1].Delay
+				}
+			}
+			members = append(members, m)
+		}
+		groups = append(groups, SingboxProxyGroup{
+			Tag:     p.Name,
+			Type:    t,
+			Now:     p.Now,
+			Members: members,
+		})
+	}
+	response.Success(w, SingboxProxiesListResponse{Groups: groups})
+}
+
+// clashGet performs an internal HTTP GET against the upstream Clash
+// API. query is appended verbatim if non-empty.
+func (h *SingboxProxiesHandler) clashGet(path, query string) ([]byte, error) {
+	base := h.clashBaseURL()
+	if base == "" {
+		return nil, errors.New("clash base URL not configured")
+	}
+	target := base + path
+	if query != "" {
+		target += "?" + query
+	}
+	client := h.httpClient
+	if client == nil {
+		client = &http.Client{Timeout: 10 * time.Second}
+	}
+	resp, err := client.Get(target)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("clash %d: %s", resp.StatusCode, string(body))
+	}
+	return io.ReadAll(resp.Body)
+}
+
+// queryEscape is a tiny wrapper so callers don't have to import
+// net/url for one-off escapes.
+func queryEscape(s string) string { return url.QueryEscape(s) }
