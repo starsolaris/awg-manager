@@ -2,6 +2,8 @@ package router
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -120,6 +122,68 @@ func TestIPTablesUninstallSequence(t *testing.T) {
 	}
 	if len(fe.calls) < 3 {
 		t.Errorf("expected >=3 calls, got %d", len(fe.calls))
+	}
+}
+
+func TestWriteNetfilterHookContainsPidofGuard(t *testing.T) {
+	tmp := t.TempDir()
+	orig := netfilterHookPath
+	netfilterHookPath = filepath.Join(tmp, "50-awgm-tproxy.sh")
+	t.Cleanup(func() { netfilterHookPath = orig })
+
+	if err := writeNetfilterHook(); err != nil {
+		t.Fatalf("writeNetfilterHook: %v", err)
+	}
+	data, err := os.ReadFile(netfilterHookPath)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	body := string(data)
+	if !strings.Contains(body, "pidof sing-box >/dev/null 2>&1 || exit 0") {
+		t.Errorf("hook missing pidof guard:\n%s", body)
+	}
+	if !strings.Contains(body, "iptables-restore --noflush") {
+		t.Errorf("hook missing restore line:\n%s", body)
+	}
+}
+
+func TestRemoveNetfilterRulesFile(t *testing.T) {
+	tmp := t.TempDir()
+	orig := netfilterRulesPath
+	netfilterRulesPath = filepath.Join(tmp, "router-netfilter.rules")
+	t.Cleanup(func() { netfilterRulesPath = orig })
+
+	if err := os.WriteFile(netfilterRulesPath, []byte("dummy"), 0644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	removeNetfilterRulesFile()
+	if _, err := os.Stat(netfilterRulesPath); !os.IsNotExist(err) {
+		t.Errorf("expected file to be gone, got err=%v", err)
+	}
+	// Idempotent — second call must not panic.
+	removeNetfilterRulesFile()
+}
+
+func TestRefreshNetfilterHookIfPresent(t *testing.T) {
+	tmp := t.TempDir()
+	orig := netfilterHookPath
+	netfilterHookPath = filepath.Join(tmp, "50-awgm-tproxy.sh")
+	t.Cleanup(func() { netfilterHookPath = orig })
+
+	// No file → no-op (does not create one).
+	refreshNetfilterHookIfPresent()
+	if _, err := os.Stat(netfilterHookPath); !os.IsNotExist(err) {
+		t.Errorf("expected no file, got err=%v", err)
+	}
+
+	// File present → rewrite with current content (and our pidof guard).
+	if err := os.WriteFile(netfilterHookPath, []byte("# stale old version\n"), 0755); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	refreshNetfilterHookIfPresent()
+	data, _ := os.ReadFile(netfilterHookPath)
+	if !strings.Contains(string(data), "pidof sing-box") {
+		t.Errorf("expected refreshed hook with pidof, got:\n%s", data)
 	}
 }
 

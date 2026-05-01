@@ -18,7 +18,11 @@ const (
 	Fwmark       = 0x1
 	RoutingTable = 100
 	ChainName    = "AWGM-TPROXY"
+)
 
+// Mutable in tests via t.Cleanup so they can redirect into a tmp dir.
+// Production code reads these at call time.
+var (
 	netfilterHookPath  = "/opt/etc/ndm/netfilter.d/50-awgm-tproxy.sh"
 	netfilterRulesPath = "/opt/etc/awg-manager/singbox/router-netfilter.rules"
 )
