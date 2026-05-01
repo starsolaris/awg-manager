@@ -12,8 +12,9 @@
 		Input,
 		Modal,
 		StatusDot,
+		StatRow,
 	} from '$lib/components/ui';
-	import type { DropdownOption } from '$lib/components/ui';
+	import type { DropdownOption, StatTile } from '$lib/components/ui';
 	import { NetfilterMissingBanner } from '$lib/components/routing/singboxRouter';
 
 	const statusStore = singboxRouter.status;
@@ -145,6 +146,17 @@
 	const issuesCount = $derived(visibleIssues.length);
 	const rulesCount = $derived(status?.ruleCount ?? rules.length);
 	const ruleSetsCount = $derived(status?.ruleSetCount ?? ruleSets.length);
+
+	const statTiles = $derived<StatTile[]>([
+		{ label: 'Правил', value: rulesCount },
+		{ label: 'Наборов', value: ruleSetsCount },
+		{ label: 'Outbounds', value: outboundsCount },
+		{
+			label: 'Issues',
+			value: issuesCount,
+			accent: issuesCount > 0 ? 'warning' : 'default',
+		},
+	]);
 </script>
 
 {#if status}
@@ -237,23 +249,8 @@
 	{/if}
 
 	<!-- Stat tiles -->
-	<div class="stat-row">
-		<div class="tile">
-			<div class="tile-label">Правил</div>
-			<div class="tile-value">{rulesCount}</div>
-		</div>
-		<div class="tile">
-			<div class="tile-label">Наборов</div>
-			<div class="tile-value">{ruleSetsCount}</div>
-		</div>
-		<div class="tile">
-			<div class="tile-label">Outbounds</div>
-			<div class="tile-value">{outboundsCount}</div>
-		</div>
-		<div class="tile" class:tile-warning={issuesCount > 0}>
-			<div class="tile-label">Issues</div>
-			<div class="tile-value">{issuesCount}</div>
-		</div>
+	<div class="stat-row-wrap">
+		<StatRow tiles={statTiles} />
 	</div>
 
 	<!-- Issues panel -->
@@ -401,33 +398,8 @@
 		color: var(--color-text-muted);
 		line-height: 1.4;
 	}
-	.stat-row {
-		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: 0.625rem;
+	.stat-row-wrap {
 		margin-top: 1rem;
-	}
-	.tile {
-		padding: 0.625rem 0.875rem;
-		background: var(--color-bg-secondary);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius);
-	}
-	.tile-warning {
-		border-color: var(--color-warning);
-	}
-	.tile-label {
-		font-size: 0.6875rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-muted);
-		margin-bottom: 0.25rem;
-	}
-	.tile-value {
-		font-family: var(--font-mono, ui-monospace, monospace);
-		font-size: 1.125rem;
-		color: var(--color-text-primary);
-		font-weight: 500;
 	}
 	.issues-panel {
 		display: flex;
@@ -467,12 +439,7 @@
 		font-size: 0.85rem;
 		line-height: 1.4;
 	}
-	@media (max-width: 720px) {
-		.stat-row {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-		}
-	}
-	.stat-row + :global(.card) {
+	.stat-row-wrap + :global(.card) {
 		margin-top: 1rem;
 	}
 </style>

@@ -6,6 +6,7 @@
 	import { singboxStatus } from '$lib/stores/singbox';
 	import JsonConfigDrawer from './JsonConfigDrawer.svelte';
 	import EngineSubTab from './EngineSubTab.svelte';
+	import RulesSubTab from './RulesSubTab.svelte';
 
 	type SubTab = 'engine' | 'rules' | 'rulesets' | 'dns' | 'deviceproxy';
 
@@ -74,7 +75,7 @@
 	{#if active === 'engine'}
 		<EngineSubTab />
 	{:else if active === 'rules'}
-		<div class="placeholder">Правила — будут в следующей задаче</div>
+		<RulesSubTab />
 	{:else if active === 'rulesets'}
 		<div class="placeholder">Наборы — будут в следующей задаче</div>
 	{:else if active === 'dns'}
