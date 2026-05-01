@@ -97,7 +97,10 @@ func TestInspect(t *testing.T) {
 			wantType:  "domain",
 		},
 		{
-			name:  "rule_set produces note + treated as no-match",
+			// rule_set referenced but not declared in route.rule_set[] →
+			// inspector cannot evaluate it, emits a Note, and the rule
+			// is treated as no-match so the walk falls through to final.
+			name:  "rule_set undefined produces note + treated as no-match",
 			input: InspectInput{Domain: "google.com"},
 			rules: []Rule{
 				{RuleSet: []string{"geosite-google"}, Action: "route", Outbound: "vpn"},
@@ -189,7 +192,7 @@ func TestInspect(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := Inspect(c.input, c.rules, nil, c.final)
+			got := Inspect(c.input, c.rules, nil, c.final, "", nil)
 			if got.Destination != c.wantDest {
 				t.Errorf("Destination = %q, want %q", got.Destination, c.wantDest)
 			}
@@ -221,7 +224,7 @@ func TestInspect_DomainSuffixCaseInsensitive(t *testing.T) {
 	res := Inspect(
 		InspectInput{Domain: "WWW.GOOGLE.COM"},
 		[]Rule{{DomainSuffix: []string{"google.com"}, Action: "route", Outbound: "vpn"}},
-		nil, "direct",
+		nil, "direct", "", nil,
 	)
 	if res.Destination != "vpn" {
 		t.Errorf("Destination = %q, want vpn", res.Destination)
@@ -234,7 +237,7 @@ func TestInspect_LeadingDotSuffix(t *testing.T) {
 	res := Inspect(
 		InspectInput{Domain: "example.com"},
 		[]Rule{{DomainSuffix: []string{".example.com"}, Action: "route", Outbound: "vpn"}},
-		nil, "direct",
+		nil, "direct", "", nil,
 	)
 	if res.Destination != "vpn" {
 		t.Errorf("Destination = %q, want vpn", res.Destination)
@@ -249,7 +252,7 @@ func TestInspect_MatchesAreInOrder(t *testing.T) {
 		{DomainSuffix: []string{"bar.com"}, Action: "route", Outbound: "b"},
 		{DomainSuffix: []string{"baz.com"}, Action: "route", Outbound: "c"},
 	}
-	res := Inspect(InspectInput{Domain: "bar.com"}, rules, nil, "direct")
+	res := Inspect(InspectInput{Domain: "bar.com"}, rules, nil, "direct", "", nil)
 	if res.MatchedRule != 1 {
 		t.Errorf("MatchedRule = %d, want 1", res.MatchedRule)
 	}

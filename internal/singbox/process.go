@@ -173,6 +173,12 @@ func (p *Process) Start() error {
 	}
 }
 
+// Binary returns the path to the sing-box executable used by this
+// process. Inspector and other tools shell out to it for rule-set match.
+func (p *Process) Binary() string {
+	return p.binary
+}
+
 // LastStderr returns the most recent captured stderr tail (~16KB) from the
 // last sing-box run. Empty when there has been no exit since process start.
 func (p *Process) LastStderr() string {

@@ -360,6 +360,11 @@ func freshBaseConfig() map[string]any {
 // to drop additional config fragments alongside ours).
 func (o *Operator) ConfigDir() string { return o.configPath }
 
+// Binary returns the path to the sing-box executable. Used by the
+// router's Inspect path to shell out to `sing-box rule-set match` when
+// evaluating rule_set matchers in the Route Inspector.
+func (o *Operator) Binary() string { return o.binary }
+
 // ValidateConfigDir runs `sing-box check` over the entire config.d.
 // Used by callers that just wrote a fragment and want to verify the
 // merged config is valid before reload.

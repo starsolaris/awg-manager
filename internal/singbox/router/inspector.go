@@ -46,6 +46,20 @@ type InspectResult struct {
 	Note        string            `json:"note,omitempty"`
 }
 
+// inspectEnv bundles the dependencies the rule_set matcher needs at
+// evaluation time. Kept as an internal struct so Inspect's public
+// signature stays narrow — callers thread these via Inspect's params.
+type inspectEnv struct {
+	ruleSetByTag  map[string]RuleSet
+	singboxBinary string
+	cache         *ruleSetCache
+	// unsupported accumulates human-readable notes for rule_sets we
+	// could not evaluate (binary missing, file missing, etc.). The
+	// resulting strings are joined into InspectResult.Note so the user
+	// understands why some rule_set matchers are reported as no-match.
+	unsupported []string
+}
+
 // Inspect walks rules in priority order, evaluates each rule's matchers
 // against the input, and returns a result describing both the per-rule
 // decisions and the final destination outbound.
@@ -60,9 +74,12 @@ type InspectResult struct {
 //     "no input given" signal, not a match.
 //   - Protocol: matches if equal to input.Protocol (case-insensitive).
 //     Empty input.Protocol skips the matcher.
-//   - RuleSet: NOT supported in v1 — flagged on the InspectResult.Note
-//     and the per-rule Reason; the rule is treated as no-match so the
-//     walk continues to subsequent rules.
+//   - RuleSet: a rule's `rule_set: [a, b]` is OR — any one of the listed
+//     rule sets matching makes the matcher TRUE. We delegate the actual
+//     match to `sing-box rule-set match` shelled out via singboxBinary.
+//     When the binary is missing or the rule-set file cannot be obtained
+//     the matcher degrades to no-match and a note is appended to the
+//     result so the user is not silently misled.
 //   - SourceIPCIDR: skipped (irrelevant for this inspector — there is no
 //     "source IP" in a manual probe).
 //
@@ -70,7 +87,12 @@ type InspectResult struct {
 // action == "reject") wins. Non-terminal actions ("sniff", "hijack-dns")
 // continue the walk. If nothing matches, Destination falls back to
 // route.final (or "direct" when final is empty).
-func Inspect(input InspectInput, rules []Rule, ruleSets []RuleSet, final string) InspectResult {
+//
+// singboxBinary may be empty (dev machine without sing-box installed) —
+// matchRuleSet treats that as "unsupported" and the matcher reports
+// no-match with an explanatory reason. cache may be nil; in that case
+// remote rule_sets are skipped as unsupported but local ones still work.
+func Inspect(input InspectInput, rules []Rule, ruleSets []RuleSet, final string, singboxBinary string, cache *ruleSetCache) InspectResult {
 	res := InspectResult{
 		Input:       input.Domain,
 		Matches:     []RuleMatchResult{},
@@ -86,10 +108,17 @@ func Inspect(input InspectInput, rules []Rule, ruleSets []RuleSet, final string)
 		res.InputType = "domain"
 	}
 
-	hasRuleSetUsage := false
+	env := &inspectEnv{
+		ruleSetByTag:  make(map[string]RuleSet, len(ruleSets)),
+		singboxBinary: singboxBinary,
+		cache:         cache,
+	}
+	for _, rs := range ruleSets {
+		env.ruleSetByTag[rs.Tag] = rs
+	}
 
 	for i, rule := range rules {
-		match := evaluateRule(input, parsedIP, rule, &hasRuleSetUsage)
+		match := evaluateRule(input, parsedIP, rule, env)
 		match.Index = i
 		res.Matches = append(res.Matches, match)
 
@@ -139,13 +168,19 @@ func Inspect(input InspectInput, rules []Rule, ruleSets []RuleSet, final string)
 		}
 	}
 
-	if hasRuleSetUsage {
-		res.Note = "Сопоставление rule_set не поддерживается в этой версии — такие правила пропускаются как не совпавшие."
+	if len(env.unsupported) > 0 {
+		// Dedupe — the same rule_set may appear in many rules.
+		seen := make(map[string]struct{}, len(env.unsupported))
+		uniq := make([]string, 0, len(env.unsupported))
+		for _, s := range env.unsupported {
+			if _, ok := seen[s]; ok {
+				continue
+			}
+			seen[s] = struct{}{}
+			uniq = append(uniq, s)
+		}
+		res.Note = "Не удалось проверить rule_set: " + strings.Join(uniq, "; ")
 	}
-
-	// Suppress unused-parameter warning while keeping the signature
-	// stable for a future rule_set-aware implementation.
-	_ = ruleSets
 
 	return res
 }
@@ -153,20 +188,10 @@ func Inspect(input InspectInput, rules []Rule, ruleSets []RuleSet, final string)
 // evaluateRule returns the per-rule decision. Empty rule (no matchers)
 // is defensively treated as no-match — it would otherwise sweep every
 // query into a "match" bucket and confuse the UI.
-func evaluateRule(input InspectInput, parsedIP net.IP, rule Rule, ruleSetUsedPtr *bool) RuleMatchResult {
+func evaluateRule(input InspectInput, parsedIP net.IP, rule Rule, env *inspectEnv) RuleMatchResult {
 	out := RuleMatchResult{
 		Action:   rule.Action,
 		Outbound: rule.Outbound,
-	}
-
-	// rule_set short-circuit: v1 cannot evaluate it. Flag and bail with
-	// no-match so the inspector remains useful for the surrounding
-	// rules without claiming false positives.
-	if len(rule.RuleSet) > 0 {
-		*ruleSetUsedPtr = true
-		out.Conditions = append(out.Conditions, fmt.Sprintf("rule_set: %s", strings.Join(rule.RuleSet, ", ")))
-		out.Reason = "rule_set inspection не реализована — считаем как несовпадение"
-		return out
 	}
 
 	// SourceIPCIDR is a context we don't have for a manual probe.
@@ -182,7 +207,51 @@ func evaluateRule(input InspectInput, parsedIP net.IP, rule Rule, ruleSetUsedPtr
 		ipPart       partial
 		portPart     partial
 		protocolPart partial
+		ruleSetPart  partial
 	)
+
+	// rule_set: a rule's `rule_set: [a, b]` is OR — any one matching
+	// makes the matcher TRUE. We probe each tag in turn and stop on the
+	// first hit. Unevaluatable tags (binary missing, file missing) are
+	// recorded as unsupported and counted as no-match for that tag, but
+	// do not prevent other tags in the same rule from matching.
+	if len(rule.RuleSet) > 0 {
+		ruleSetPart.present = true
+		probeInput := input.Domain
+		for _, tag := range rule.RuleSet {
+			rs, known := env.ruleSetByTag[tag]
+			if !known {
+				out.Conditions = append(out.Conditions, fmt.Sprintf("rule_set %q → не определён", tag))
+				if env != nil {
+					env.unsupported = append(env.unsupported, fmt.Sprintf("%s (не определён в rule_set[])", tag))
+				}
+				continue
+			}
+			matched, supported, mErr := matchRuleSet(probeInput, rs, env.singboxBinary, env.cache)
+			switch {
+			case !supported:
+				reason := "не удалось проверить (нет sing-box или файла)"
+				if mErr != nil {
+					reason = fmt.Sprintf("ошибка: %v", mErr)
+				}
+				out.Conditions = append(out.Conditions, fmt.Sprintf("rule_set %q → %s", tag, reason))
+				if env != nil {
+					env.unsupported = append(env.unsupported, fmt.Sprintf("%s (%s)", tag, reason))
+				}
+			case matched:
+				out.Conditions = append(out.Conditions, fmt.Sprintf("rule_set %q → совпало", tag))
+				ruleSetPart.hit = true
+			default:
+				out.Conditions = append(out.Conditions, fmt.Sprintf("rule_set %q → не совпало", tag))
+			}
+			if ruleSetPart.hit {
+				// Short-circuit: OR semantics — first hit wins. Remaining
+				// tags are neither evaluated nor reported (mirrors how
+				// sing-box itself bails out at runtime).
+				break
+			}
+		}
+	}
 
 	// DomainSuffix
 	if len(rule.DomainSuffix) > 0 {
@@ -247,7 +316,7 @@ func evaluateRule(input InspectInput, parsedIP net.IP, rule Rule, ruleSetUsedPtr
 	// matcher must hit (or, for Port without input, be permissively
 	// skipped — we explicitly do NOT count an unverifiable matcher as
 	// a hit, so an unverified port keeps the rule as no-match).
-	anyPresent := domainPart.present || ipPart.present || portPart.present || protocolPart.present
+	anyPresent := domainPart.present || ipPart.present || portPart.present || protocolPart.present || ruleSetPart.present
 	if !anyPresent {
 		out.Reason = "пустое правило — пропущено"
 		return out
@@ -266,6 +335,9 @@ func evaluateRule(input InspectInput, parsedIP net.IP, rule Rule, ruleSetUsedPtr
 	if protocolPart.present && !protocolPart.hit {
 		matched = false
 	}
+	if ruleSetPart.present && !ruleSetPart.hit {
+		matched = false
+	}
 
 	out.Matched = matched
 	if matched {
@@ -281,6 +353,9 @@ func evaluateRule(input InspectInput, parsedIP net.IP, rule Rule, ruleSetUsedPtr
 		}
 		if protocolPart.hit {
 			hits = append(hits, "protocol")
+		}
+		if ruleSetPart.hit {
+			hits = append(hits, "rule_set")
 		}
 		out.Reason = "совпало по: " + strings.Join(hits, ", ")
 	} else {

@@ -70,6 +70,11 @@ type SingboxController interface {
 	Start() error
 	ValidateConfigDir(ctx context.Context) error
 	ConfigDir() string
+	// Binary returns the absolute path (or PATH-resolvable name) of the
+	// sing-box executable. Inspect shells out to it for `rule-set match`
+	// evaluation. May return empty string when the binary is unknown —
+	// callers must tolerate that and degrade gracefully.
+	Binary() string
 }
 
 // PolicyDevice is one LAN device known to NDMS hotspot, annotated with
@@ -149,6 +154,12 @@ type ServiceImpl struct {
 	deps        Deps
 	mu          sync.Mutex
 	currentMark string // last-installed iptables mark; used by Reconcile to detect change
+
+	// inspectCache backs the route-inspector's rule_set match path. Lazy
+	// constructed on first Inspect call so dev-machine builds (no
+	// sing-box binary, no /tmp writes during NewService) stay clean.
+	inspectCacheOnce sync.Once
+	inspectCache     *ruleSetCache
 }
 
 func NewService(d Deps) *ServiceImpl {
@@ -863,9 +874,15 @@ func (s *ServiceImpl) UnbindDevice(ctx context.Context, mac string) error {
 }
 
 // Inspect simulates which router rule would match the given input
-// (a domain or an IP) without invoking sing-box. Reads the current
-// persisted config so the result reflects what the user would observe
-// at runtime — minus rule_set evaluation, which v1 does not perform.
+// (a domain or an IP). The matcher walk is purely Go; only rule_set
+// matchers shell out to `sing-box rule-set match` to consult the
+// binary or downloaded JSON list. Reads the current persisted config so
+// the result reflects what the user would observe at runtime.
+//
+// When the sing-box binary is unavailable (dev machine, fresh install
+// before the user has installed the package) rule_set matchers degrade
+// to no-match and a Note is appended to the result — the rest of the
+// inspector still works.
 func (s *ServiceImpl) Inspect(ctx context.Context, input InspectInput) (InspectResult, error) {
 	cfg, err := s.loadRouterConfig()
 	if err != nil {
@@ -878,5 +895,12 @@ func (s *ServiceImpl) Inspect(ctx context.Context, input InspectInput) (InspectR
 	if final == "" {
 		final = "direct"
 	}
-	return Inspect(input, cfg.Route.Rules, cfg.Route.RuleSet, final), nil
+	binary := ""
+	if s.deps.Singbox != nil {
+		binary = s.deps.Singbox.Binary()
+	}
+	s.inspectCacheOnce.Do(func() {
+		s.inspectCache = newRuleSetCache("")
+	})
+	return Inspect(input, cfg.Route.Rules, cfg.Route.RuleSet, final, binary, s.inspectCache), nil
 }
