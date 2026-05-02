@@ -12,10 +12,11 @@
 	import OutboundsSubTab from './OutboundsSubTab.svelte';
 	import DnsSubTab from './DnsSubTab.svelte';
 	import DeviceProxySubTab from './DeviceProxySubTab.svelte';
+	import { ConnectionsSubTab } from '$lib/components/routing/singboxRouter';
 
-	type SubTab = 'engine' | 'rules' | 'rulesets' | 'outbounds' | 'dns' | 'deviceproxy';
+	type SubTab = 'engine' | 'rules' | 'rulesets' | 'outbounds' | 'dns' | 'deviceproxy' | 'connections';
 
-	const order: SubTab[] = ['engine', 'rules', 'rulesets', 'outbounds', 'dns', 'deviceproxy'];
+	const order: SubTab[] = ['engine', 'rules', 'rulesets', 'outbounds', 'dns', 'deviceproxy', 'connections'];
 
 	const labels: Record<SubTab, string> = {
 		engine: 'Движок',
@@ -23,7 +24,8 @@
 		rulesets: 'Наборы',
 		outbounds: 'Outbounds',
 		dns: 'DNS',
-		deviceproxy: 'Прокси'
+		deviceproxy: 'Прокси',
+		connections: 'Соединения'
 	};
 
 	let active = $state<SubTab>('engine');
@@ -92,6 +94,8 @@
 		<DnsSubTab />
 	{:else if active === 'deviceproxy'}
 		<DeviceProxySubTab />
+	{:else if active === 'connections'}
+		<ConnectionsSubTab />
 	{/if}
 </section>
 
