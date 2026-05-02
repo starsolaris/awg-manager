@@ -186,7 +186,7 @@ const server = http.createServer((req, res) => {
 			tag,
 			type: g.type,
 			now: g.now,
-			all: g.all.map((memberTag) => ({
+			members: g.all.map((memberTag) => ({
 				tag: memberTag,
 				type: 'vless',
 				lastDelay: mockProxyDelays[memberTag] ?? 0,
