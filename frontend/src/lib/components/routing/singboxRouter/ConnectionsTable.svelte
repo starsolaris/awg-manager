@@ -139,7 +139,7 @@
 </div>
 
 <style>
-	.wrap { overflow-x: auto; min-height: 320px; }
+	.wrap { overflow: auto; height: 540px; }
 	.t {
 		width: 100%;
 		border-collapse: collapse;

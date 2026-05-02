@@ -174,7 +174,7 @@
 		color: var(--text-tertiary, #6e6e6e);
 		font-family: ui-monospace, monospace; font-size: 10px;
 	}
-	.buckets { flex: 1; min-height: 180px; max-height: 280px; overflow-y: auto; }
+	.buckets { height: 240px; overflow-y: auto; }
 	.bucket {
 		all: unset;
 		display: block;

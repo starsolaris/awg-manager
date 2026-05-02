@@ -199,7 +199,8 @@
 	.dot { color: var(--text-tertiary, #6e6e6e); margin: 0 6px; }
 	.num { font-variant-numeric: tabular-nums; }
 	.totals-text { display: inline-flex; align-items: baseline; gap: 0; white-space: nowrap; }
-	.totals-bytes { display: inline-block; min-width: 90px; }
+	.totals-count { display: inline-block; min-width: 220px; }
+	.totals-bytes { display: inline-block; min-width: 100px; }
 	.status {
 		display: inline-flex; align-items: center; gap: 4px;
 		font-size: 12px;
