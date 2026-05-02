@@ -1188,7 +1188,7 @@ class ApiClient {
 		return this.request('/singbox/status');
 	}
 
-	async getSingboxClientsByIP(): Promise<{ clientsByIP: Record<string, string> }> {
+	async singboxGetClientsByIP(): Promise<{ clientsByIP: Record<string, string> }> {
 		return this.request('/singbox/connections/clients');
 	}
 
