@@ -46,6 +46,7 @@ func (h *ManagedServerHandler) AddPeer(w http.ResponseWriter, r *http.Request, i
 		response.Error(w, err.Error(), "ADD_PEER_FAILED")
 		return
 	}
+	h.svc.InvalidateCache(id)
 	response.Success(w, peer)
 	h.publishServerUpdated()
 }
@@ -76,6 +77,7 @@ func (h *ManagedServerHandler) UpdatePeer(w http.ResponseWriter, r *http.Request
 		response.Error(w, err.Error(), "UPDATE_PEER_FAILED")
 		return
 	}
+	h.svc.InvalidateCache(id)
 	h.publishServerUpdated()
 	h.writeServersSnapshot(w, r)
 }
@@ -103,6 +105,7 @@ func (h *ManagedServerHandler) DeletePeer(w http.ResponseWriter, r *http.Request
 		response.Error(w, err.Error(), "DELETE_PEER_FAILED")
 		return
 	}
+	h.svc.InvalidateCache(id)
 	h.publishServerUpdated()
 	h.writeServersSnapshot(w, r)
 }
@@ -132,6 +135,7 @@ func (h *ManagedServerHandler) TogglePeer(w http.ResponseWriter, r *http.Request
 		response.Error(w, err.Error(), "TOGGLE_FAILED")
 		return
 	}
+	h.svc.InvalidateCache(id)
 	h.publishServerUpdated()
 	h.writeServersSnapshot(w, r)
 }
