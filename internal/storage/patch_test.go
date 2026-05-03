@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -292,4 +294,55 @@ func containsSubstr(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+// TestSettingsPatchMirrorsSettings enforces that every exported field in
+// Settings has a matching pointer field in SettingsPatch with the same
+// json tag. Catches drift at test time when a new Settings field lands
+// without a corresponding SettingsPatch entry.
+func TestSettingsPatchMirrorsSettings(t *testing.T) {
+	settingsT := reflect.TypeOf(Settings{})
+	patchT := reflect.TypeOf(SettingsPatch{})
+
+	patchByTag := map[string]reflect.StructField{}
+	for i := 0; i < patchT.NumField(); i++ {
+		f := patchT.Field(i)
+		tag := strings.Split(f.Tag.Get("json"), ",")[0]
+		if tag == "" || tag == "-" {
+			continue
+		}
+		patchByTag[tag] = f
+	}
+
+	for i := 0; i < settingsT.NumField(); i++ {
+		f := settingsT.Field(i)
+		if !f.IsExported() {
+			continue
+		}
+		tag := strings.Split(f.Tag.Get("json"), ",")[0]
+		if tag == "" || tag == "-" {
+			continue
+		}
+		patchF, ok := patchByTag[tag]
+		if !ok {
+			t.Errorf("Settings.%s (json:%q) has no corresponding field in SettingsPatch", f.Name, tag)
+			continue
+		}
+		if patchF.Type.Kind() != reflect.Pointer {
+			t.Errorf("SettingsPatch.%s (json:%q) must be a pointer, got %s", patchF.Name, tag, patchF.Type)
+			continue
+		}
+		// For pointer-in-Settings (like ManagedServer *ManagedServer), patch
+		// should be the same pointer type. For value-in-Settings, patch
+		// should be *value.
+		if f.Type.Kind() == reflect.Pointer {
+			if patchF.Type != f.Type {
+				t.Errorf("SettingsPatch.%s: expected %s, got %s", patchF.Name, f.Type, patchF.Type)
+			}
+		} else {
+			if patchF.Type.Elem() != f.Type {
+				t.Errorf("SettingsPatch.%s: expected *%s, got %s", patchF.Name, f.Type, patchF.Type)
+			}
+		}
+	}
 }
