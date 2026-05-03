@@ -148,7 +148,7 @@ func (p *Process) Start() error {
 	}()
 	select {
 	case waitErr := <-errCh:
-		_ = os.Remove(p.pidPath)
+		p.cleanupPidIfOurs(cmd.Process.Pid)
 		msg := strings.TrimSpace(stderr.String())
 		if msg == "" {
 			if waitErr != nil {
@@ -160,9 +160,10 @@ func (p *Process) Start() error {
 		p.setLastStderr(msg)
 		return fmt.Errorf("sing-box exited during startup: %s", msg)
 	case <-time.After(startupGracePeriod):
+		myPid := cmd.Process.Pid
 		go func() {
 			waitErr := <-errCh
-			_ = os.Remove(p.pidPath)
+			p.cleanupPidIfOurs(myPid)
 			tail := strings.TrimSpace(stderr.String())
 			p.setLastStderr(tail)
 			if p.OnExit != nil {
@@ -243,6 +244,22 @@ func (p *Process) IsRunning() (bool, int) {
 		return false, pid
 	}
 	return true, pid
+}
+
+// cleanupPidIfOurs removes the pid file ONLY if it currently contains the
+// given pid. Best-effort ownership check: a successor Start can still race
+// in between the readPID and os.Remove below, but the window is now
+// microseconds rather than seconds — small enough that issue #40 process
+// accumulation no longer reproduces in practice.
+func (p *Process) cleanupPidIfOurs(myPid int) {
+	curPid, err := p.readPID()
+	if err != nil {
+		return
+	}
+	if curPid != myPid {
+		return
+	}
+	_ = os.Remove(p.pidPath)
 }
 
 // readPID parses the PID file.

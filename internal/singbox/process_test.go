@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -91,4 +92,43 @@ func TestProcessStartReportsImmediateExit(t *testing.T) {
 	if !strings.Contains(err.Error(), "FATAL boom") {
 		t.Errorf("expected stderr in error, got %v", err)
 	}
+}
+
+// Pre-grace and post-grace OnExit goroutines must not delete the pidfile
+// when it has been overwritten by a newer Start. Simulates the race that
+// caused process accumulation in issue #40.
+func TestProcess_OnExitDoesNotClobberSuccessorPid(t *testing.T) {
+	dir := t.TempDir()
+	pidPath := filepath.Join(dir, "sing-box.pid")
+	// Write a "successor" pid to the file BEFORE the OnExit goroutine
+	// has a chance to remove it.
+	successorPid := 99999
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(successorPid)), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	p := NewProcess("/nonexistent", "/nonexistent.json", pidPath)
+	// Simulate the cleanup-on-exit logic with our own pid (different from successor).
+	myPid := 11111
+	p.cleanupPidIfOurs(myPid) // helper we'll add
+
+	// Pidfile must still contain the successor pid — we did NOT clobber it.
+	data, err := os.ReadFile(pidPath)
+	if err != nil {
+		t.Fatalf("pidfile gone: %v", err)
+	}
+	got, _ := strconv.Atoi(string(data))
+	if got != successorPid {
+		t.Errorf("pidfile = %d, want %d (our cleanup must respect successor pid)", got, successorPid)
+	}
+
+	// And when our pid IS in the file, cleanup removes it.
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(myPid)), 0644); err != nil {
+		t.Fatal(err)
+	}
+	p.cleanupPidIfOurs(myPid)
+	if _, err := os.Stat(pidPath); !os.IsNotExist(err) {
+		t.Errorf("pidfile not removed when it contained our pid: %v", err)
+	}
+
 }
