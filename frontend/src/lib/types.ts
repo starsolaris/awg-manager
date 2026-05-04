@@ -1401,3 +1401,42 @@ export interface TunnelReferencedError {
 }
 
 // #endregion
+
+// === Sing-box Router Setup Wizard ===
+
+export type WizardStep =
+	| 'presets'
+	| 'tunnel'
+	| 'devices'
+	| 'summary'
+	| 'applying'
+	| 'success'
+	| 'error';
+
+export type ApplyLogStatus = 'pending' | 'running' | 'ok' | 'err';
+
+export interface ApplyLogEntry {
+	label: string;
+	status: ApplyLogStatus;
+	message?: string;
+}
+
+export interface WizardState {
+	step: WizardStep;
+	presetIds: string[];
+	tunnelTag: string | null;
+	deviceMacs: string[];
+	policyName: string;
+	dnsServer: string | null;
+	applyLog: ApplyLogEntry[];
+	error: { phase: string; message: string } | null;
+}
+
+export interface WizardResult {
+	policyCreated: boolean;
+	devicesBound: number;
+	presetsApplied: number;
+	dnsServerCreated: boolean;
+	dnsRuleUpdated: boolean;
+	engineStarted: boolean;
+}
