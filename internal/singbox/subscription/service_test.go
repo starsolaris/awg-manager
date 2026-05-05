@@ -127,6 +127,47 @@ func TestService_Create_FailsOnZeroOutbounds_ClashYAML(t *testing.T) {
 	}
 }
 
+func TestService_Create_FailsOnEmptyClashProxiesArray(t *testing.T) {
+	// Real-world body shape served by an expired clash subscription:
+	// YAML parses cleanly, but proxies: [] is literally empty. We must
+	// surface a distinct "subscription is empty" hint instead of the
+	// generic "no valid links" message.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
+		w.Write([]byte(`mixed-port: 7890
+dns:
+  enable: true
+proxies: []
+proxy-groups:
+  - name: → Remnawave
+    type: select
+    proxies: []
+rules:
+  - MATCH,→ Remnawave
+`))
+	}))
+	defer srv.Close()
+
+	store, _ := NewStore(filepath.Join(t.TempDir(), "sub.json"))
+	mutator := &fakeMutator{}
+	svc := NewService(store, mutator)
+
+	_, err := svc.Create(context.Background(), CreateInput{Label: "expired", URL: srv.URL, Enabled: true})
+	if err == nil {
+		t.Fatalf("Create with empty Clash proxies must fail")
+	}
+	if !strings.Contains(err.Error(), "пуста") {
+		t.Errorf("error must hint that subscription is empty, got: %v", err)
+	}
+	if len(store.List()) != 0 {
+		t.Errorf("subscription must be cleaned up, got %d", len(store.List()))
+	}
+	// Bug-fix from previous commit also applies here: ProxyN must be rolled back.
+	if len(mutator.removedProxies) != 1 {
+		t.Errorf("expected 1 RemoveProxy rollback, got %d", len(mutator.removedProxies))
+	}
+}
+
 // TestService_Create_RollsBackProxyOnFetchFailure asserts the bug fix
 // where each failed Create call leaked an NDMS ProxyN interface — the
 // initial-fetch failure path now also removes the proxy registered by

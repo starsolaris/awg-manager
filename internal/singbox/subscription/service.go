@@ -127,8 +127,9 @@ func (s *Service) refreshLocked(ctx context.Context, id string) (*RefreshResult,
 		s.store.UpdateState(id, RefreshResult{When: time.Now(), Err: masked})
 		return nil, masked
 	}
+	isClash := vlink.IsClashYAML(body)
 	var parseRes vlink.BatchResult
-	if vlink.IsClashYAML(body) {
+	if isClash {
 		parseRes = vlink.ParseClashBody(body)
 	} else {
 		lines := NormalizeBody(body, ct)
@@ -136,11 +137,20 @@ func (s *Service) refreshLocked(ctx context.Context, id string) (*RefreshResult,
 	}
 
 	if len(parseRes.Outbounds) == 0 {
-		hint := "ни одной валидной ссылки. Поддерживаются: base64-encoded share-links, HTML с share-link якорями, plain text со ссылками vless://, trojan://, ss://, hysteria2://, а также Clash YAML / mihomo (типы vless, trojan, ss, hysteria2). Записи vmess пропускаются."
+		// Distinguish three failure shapes:
+		//  1. Clash YAML parsed cleanly with proxies: []  → subscription empty
+		//     (often: account expired, quota exhausted, or not yet activated).
+		//  2. Clash YAML / share-link body parsed with errors → bad entries.
+		//  3. Body in unsupported format → 0 entries, 0 errors, not Clash.
 		var errMsg string
-		if len(parseRes.Errors) > 0 {
+		switch {
+		case isClash && len(parseRes.Errors) == 0 && parseRes.SkippedVmess == 0 && parseRes.SkippedUnsupp == 0:
+			errMsg = "subscription: подписка пуста (proxies: []). Возможно, истекла или ещё не активирована — проверь на стороне провайдера."
+		case len(parseRes.Errors) > 0:
+			hint := "ни одной валидной ссылки. Поддерживаются: base64-encoded share-links, HTML с share-link якорями, plain text со ссылками vless://, trojan://, ss://, hysteria2://, а также Clash YAML / mihomo (типы vless, trojan, ss, hysteria2). Записи vmess пропускаются."
 			errMsg = fmt.Sprintf("subscription: %s Первая ошибка парсера: %s", hint, parseRes.Errors[0].Error())
-		} else {
+		default:
+			hint := "ни одной валидной ссылки. Поддерживаются: base64-encoded share-links, HTML с share-link якорями, plain text со ссылками vless://, trojan://, ss://, hysteria2://, а также Clash YAML / mihomo (типы vless, trojan, ss, hysteria2). Записи vmess пропускаются."
 			errMsg = fmt.Sprintf("subscription: %s", hint)
 		}
 		err := errors.New(errMsg)
