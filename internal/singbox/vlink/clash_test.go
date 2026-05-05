@@ -3,6 +3,7 @@ package vlink
 import (
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -212,5 +213,93 @@ func TestAsStringSlice(t *testing.T) {
 		if !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("asStringSlice(%v) = %v, want %v", tc.in, got, tc.want)
 		}
+	}
+}
+
+func TestParseClashBody_DispatchesByType(t *testing.T) {
+	body := []byte(`
+proxies:
+  - name: "v1"
+    type: vless
+    server: v1.example.com
+    port: 443
+    uuid: 3a3b1c2e-9999-4321-aaaa-1234567890ab
+    tls: true
+  - name: "t1"
+    type: trojan
+    server: t1.example.com
+    port: 443
+    password: trpass
+    sni: t1.example.com
+  - name: "s1"
+    type: ss
+    server: s1.example.com
+    port: 8388
+    cipher: aes-128-gcm
+    password: sspass
+  - name: "h1"
+    type: hysteria2
+    server: h1.example.com
+    port: 443
+    password: hy2pass
+  - name: "vm1"
+    type: vmess
+    server: vm.example.com
+    port: 443
+    uuid: 11111111-2222-3333-4444-555555555555
+  - name: "tu1"
+    type: tuic
+    server: tu.example.com
+    port: 443
+`)
+	res := ParseClashBody(body)
+	if len(res.Outbounds) != 4 {
+		t.Errorf("want 4 outbounds (vless/trojan/ss/hy2), got %d", len(res.Outbounds))
+	}
+	if res.SkippedVmess != 1 {
+		t.Errorf("SkippedVmess=%d want 1", res.SkippedVmess)
+	}
+	if res.SkippedUnsupp != 1 {
+		t.Errorf("SkippedUnsupp=%d want 1 (tuic)", res.SkippedUnsupp)
+	}
+}
+
+func TestParseClashBody_EmptyProxies(t *testing.T) {
+	res := ParseClashBody([]byte("proxies: []\n"))
+	if len(res.Outbounds) != 0 {
+		t.Errorf("want 0 outbounds, got %d", len(res.Outbounds))
+	}
+	if len(res.Errors) != 0 {
+		t.Errorf("want 0 errors, got %v", res.Errors)
+	}
+}
+
+func TestParseClashBody_InvalidYAML(t *testing.T) {
+	res := ParseClashBody([]byte("\x00\x01\x02not valid: : :\n  - %"))
+	if len(res.Outbounds) != 0 {
+		t.Errorf("want 0 outbounds")
+	}
+	if len(res.Errors) == 0 {
+		t.Errorf("want at least one ParseError")
+	}
+}
+
+func TestParseClashBody_RequiredFieldMissing(t *testing.T) {
+	body := []byte(`
+proxies:
+  - name: "broken"
+    type: vless
+    server: h
+    port: 443
+`)
+	res := ParseClashBody(body)
+	if len(res.Outbounds) != 0 {
+		t.Errorf("want 0 outbounds, got %d", len(res.Outbounds))
+	}
+	if len(res.Errors) != 1 || !strings.Contains(res.Errors[0].Message, "uuid") {
+		t.Errorf("want 1 ParseError mentioning uuid, got %+v", res.Errors)
+	}
+	if res.Errors[0].Scheme != "clash:vless" {
+		t.Errorf("Scheme=%q want clash:vless", res.Errors[0].Scheme)
 	}
 }

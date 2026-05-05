@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // scanLimit is how many bytes IsClashYAML inspects. A real Clash subscription
@@ -211,4 +213,73 @@ func nestedMap(p map[string]any, key string) map[string]any {
 		return m
 	}
 	return map[string]any{}
+}
+
+// clashRoot is the minimal subset of a Clash YAML document we care about.
+// Other top-level keys (proxy-groups, rules, dns) are ignored.
+type clashRoot struct {
+	Proxies []map[string]any `yaml:"proxies"`
+}
+
+// ParseClashBody parses a Clash/mihomo YAML subscription body and returns a
+// BatchResult identical in shape to ParseBatch.
+//
+//   - vmess entries are silently counted in SkippedVmess (matches share-link
+//     parser policy)
+//   - unknown types are counted in SkippedUnsupp and recorded in Errors
+//   - per-protocol mapping failures (missing uuid etc.) land in Errors with
+//     Scheme="clash:<type>" — they do NOT increment SkippedUnsupp because
+//     the type IS supported, the entry is just broken
+func ParseClashBody(body []byte) BatchResult {
+	out := BatchResult{}
+
+	var root clashRoot
+	if err := yaml.Unmarshal(body, &root); err != nil {
+		out.Errors = append(out.Errors, ParseError{
+			LineIdx: 0,
+			Scheme:  "clash",
+			Message: fmt.Sprintf("yaml parse: %s", err.Error()),
+		})
+		return out
+	}
+
+	out.Outbounds = make([]ParsedOutbound, 0, len(root.Proxies))
+	for i, p := range root.Proxies {
+		t := strings.ToLower(asString(p["type"]))
+		var (
+			parsed *ParsedOutbound
+			err    error
+		)
+		switch t {
+		case "vless":
+			parsed, err = mapClashVless(p)
+		case "trojan":
+			parsed, err = mapClashTrojan(p)
+		case "ss":
+			parsed, err = mapClashShadowsocks(p)
+		case "hysteria2":
+			parsed, err = mapClashHysteria2(p)
+		case "vmess":
+			out.SkippedVmess++
+			continue
+		default:
+			out.SkippedUnsupp++
+			out.Errors = append(out.Errors, ParseError{
+				LineIdx: i,
+				Scheme:  "clash:" + t,
+				Message: fmt.Sprintf("unsupported clash type %q", t),
+			})
+			continue
+		}
+		if err != nil {
+			out.Errors = append(out.Errors, ParseError{
+				LineIdx: i,
+				Scheme:  "clash:" + t,
+				Message: err.Error(),
+			})
+			continue
+		}
+		out.Outbounds = append(out.Outbounds, *parsed)
+	}
+	return out
 }
