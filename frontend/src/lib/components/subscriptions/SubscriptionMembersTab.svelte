@@ -2,6 +2,7 @@
 	import type { Subscription, SubscriptionMember } from '$lib/types';
 	import { api } from '$lib/api/client';
 	import { Button } from '$lib/components/ui';
+	import { triggerDelayCheck } from '$lib/stores/singbox';
 	import SubscriptionMemberCard from './SubscriptionMemberCard.svelte';
 
 	interface Props {
@@ -13,6 +14,8 @@
 	let refreshing = $state(false);
 	let switching = $state<string | null>(null);
 	let lastError = $state('');
+	let batchTesting = $state(false);
+	let batchProgress = $state({ done: 0, total: 0 });
 
 	// Derive member list from members[] when available; fall back to stubs
 	// built from memberTags[] for subscriptions persisted before this change.
@@ -53,6 +56,24 @@
 			switching = null;
 		}
 	}
+
+	async function testAll(): Promise<void> {
+		if (batchTesting) return;
+		const tags = memberList.map((m) => m.tag);
+		if (tags.length === 0) return;
+		batchTesting = true;
+		batchProgress = { done: 0, total: tags.length };
+		try {
+			await Promise.allSettled(
+				tags.map(async (tag) => {
+					await triggerDelayCheck(tag);
+					batchProgress = { done: batchProgress.done + 1, total: batchProgress.total };
+				}),
+			);
+		} finally {
+			batchTesting = false;
+		}
+	}
 </script>
 
 <header class="head">
@@ -60,9 +81,24 @@
 		<div class="lbl">Selector</div>
 		<div class="val mono">{subscription.selectorTag}</div>
 	</div>
-	<Button variant="primary" size="sm" disabled={refreshing} loading={refreshing} onclick={refresh}>
-		{refreshing ? 'Обновляем...' : 'Обновить сейчас'}
-	</Button>
+	<div class="actions">
+		<Button variant="primary" size="sm" disabled={refreshing} loading={refreshing} onclick={refresh}>
+			{refreshing ? 'Обновляем...' : 'Обновить сейчас'}
+		</Button>
+		<Button
+			variant="ghost"
+			size="sm"
+			disabled={batchTesting || memberList.length === 0}
+			loading={batchTesting}
+			onclick={testAll}
+		>
+			{#if batchTesting}
+				Тестируем {batchProgress.done}/{batchProgress.total}
+			{:else}
+				Проверить все
+			{/if}
+		</Button>
+	</div>
 </header>
 
 {#if lastError}
@@ -110,6 +146,7 @@
 		margin-bottom: 1rem;
 	}
 	.head-info { display: flex; flex-direction: column; gap: 0.2rem; }
+	.actions { display: flex; gap: 0.5rem; align-items: center; }
 	.lbl {
 		font-size: 0.7rem;
 		color: var(--color-text-muted);
