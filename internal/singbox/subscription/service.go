@@ -117,8 +117,13 @@ func (s *Service) refreshLocked(ctx context.Context, id string) (*RefreshResult,
 		s.store.UpdateState(id, RefreshResult{When: time.Now(), Err: masked})
 		return nil, masked
 	}
-	lines := NormalizeBody(body, ct)
-	parseRes := vlink.ParseBatch(lines)
+	var parseRes vlink.BatchResult
+	if vlink.IsClashYAML(body) {
+		parseRes = vlink.ParseClashBody(body)
+	} else {
+		lines := NormalizeBody(body, ct)
+		parseRes = vlink.ParseBatch(lines)
+	}
 
 	if len(parseRes.Outbounds) == 0 {
 		hint := "ни одной валидной ссылки. Поддерживаются: base64-encoded share-links, HTML с share-link якорями, plain text со ссылками vless://, trojan://, ss://, hysteria2://. Clash YAML / mihomo формат пока не поддерживается."

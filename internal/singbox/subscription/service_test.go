@@ -284,3 +284,118 @@ func TestService_SetActiveMember_UsesClashAPI(t *testing.T) {
 		t.Errorf("store.ActiveMember=%q want %q", stored.ActiveMember, secondMember)
 	}
 }
+
+func TestService_Create_ParsesClashYAML(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-yaml")
+		w.Write([]byte(`
+proxies:
+  - name: "🇺🇸 LA-1"
+    type: vless
+    server: la1.example.com
+    port: 443
+    uuid: 3a3b1c2e-9999-4321-aaaa-1234567890ab
+    tls: true
+    servername: la1.example.com
+  - name: "🇩🇪 FRA-1"
+    type: vless
+    server: fra1.example.com
+    port: 443
+    uuid: 4a4b1c2e-9999-4321-aaaa-1234567890ab
+    tls: true
+    servername: fra1.example.com
+  - name: "🇯🇵 TYO-1"
+    type: trojan
+    server: tyo1.example.com
+    port: 443
+    password: trpass
+    sni: tyo1.example.com
+  - name: "VM-skipme"
+    type: vmess
+    server: vm.example.com
+    port: 443
+    uuid: 11111111-2222-3333-4444-555555555555
+`))
+	}))
+	defer srv.Close()
+
+	store, _ := NewStore(filepath.Join(t.TempDir(), "sub.json"))
+	mutator := &fakeMutator{}
+	svc := NewService(store, mutator)
+
+	sub, err := svc.Create(context.Background(), CreateInput{Label: "clash", URL: srv.URL, Enabled: true})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if len(sub.MemberTags) != 3 {
+		t.Errorf("MemberTags=%d want 3", len(sub.MemberTags))
+	}
+	if len(mutator.addedOutbounds) < 4 { // 3 members + 1 selector
+		t.Errorf("expected >=4 outbounds added, got %d", len(mutator.addedOutbounds))
+	}
+	// Members must carry their human-readable Label.
+	gotLabels := map[string]bool{}
+	for _, m := range sub.Members {
+		gotLabels[m.Label] = true
+	}
+	for _, want := range []string{"🇺🇸 LA-1", "🇩🇪 FRA-1", "🇯🇵 TYO-1"} {
+		if !gotLabels[want] {
+			t.Errorf("missing Label %q in MemberInfo", want)
+		}
+	}
+}
+
+func TestService_Refresh_ClashYAMLAddsNewMember(t *testing.T) {
+	requestCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.Header().Set("Content-Type", "application/x-yaml")
+		if requestCount == 1 {
+			w.Write([]byte(`
+proxies:
+  - name: "A"
+    type: vless
+    server: a.example.com
+    port: 443
+    uuid: 3a3b1c2e-9999-4321-aaaa-1234567890ab
+    tls: true
+`))
+		} else {
+			w.Write([]byte(`
+proxies:
+  - name: "A"
+    type: vless
+    server: a.example.com
+    port: 443
+    uuid: 3a3b1c2e-9999-4321-aaaa-1234567890ab
+    tls: true
+  - name: "B"
+    type: vless
+    server: b.example.com
+    port: 443
+    uuid: 4a4b1c2e-9999-4321-aaaa-1234567890ab
+    tls: true
+`))
+		}
+	}))
+	defer srv.Close()
+
+	store, _ := NewStore(filepath.Join(t.TempDir(), "sub.json"))
+	mutator := &fakeMutator{}
+	svc := NewService(store, mutator)
+	sub, err := svc.Create(context.Background(), CreateInput{Label: "c", URL: srv.URL, Enabled: true})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if len(sub.MemberTags) != 1 {
+		t.Errorf("after first refresh want 1 member, got %d", len(sub.MemberTags))
+	}
+
+	res, err := svc.Refresh(context.Background(), sub.ID)
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if res.Added != 1 || res.Updated != 1 {
+		t.Errorf("Refresh result Added=%d Updated=%d, want Added=1 Updated=1", res.Added, res.Updated)
+	}
+}
