@@ -69,7 +69,6 @@ let mockSubscriptions = [
 		orphanTags: [],
 		activeMember: 'sub-demo0001-aabbccdd',
 		enabled: true,
-		isDefaultRoute: false,
 	},
 	{
 		id: 'sub-demo0002',
@@ -89,7 +88,6 @@ let mockSubscriptions = [
 		orphanTags: ['sub-demo0002-deadbeef'],
 		activeMember: 'sub-demo0002-99887766',
 		enabled: true,
-		isDefaultRoute: false,
 	},
 ];
 let mockSubID = 2;
@@ -122,7 +120,6 @@ function newSub(input) {
 		orphanTags: [],
 		activeMember: `sub-${shortID}-aaaa`,
 		enabled: input.enabled,
-		isDefaultRoute: false,
 	};
 }
 
@@ -869,23 +866,6 @@ const server = http.createServer(async (req, res) => {
 				const id = new URL(req.url, 'http://x').searchParams.get('id');
 				const sub = mockSubscriptions.find((s) => s.id === id);
 				if (sub) sub.activeMember = body.memberTag;
-				send(res, 200, { success: true, data: { ok: true } });
-			} catch (e) {
-				send(res, 400, { success: false, error: { code: 'INVALID_REQUEST', message: String(e) } });
-			}
-		});
-		return;
-	}
-
-	if (req.method === 'POST' && path === '/singbox/subscriptions/default-route') {
-		let raw = '';
-		req.on('data', (c) => (raw += c));
-		req.on('end', () => {
-			try {
-				const body = JSON.parse(raw || '{}');
-				const id = new URL(req.url, 'http://x').searchParams.get('id');
-				const sub = mockSubscriptions.find((s) => s.id === id);
-				if (sub) sub.isDefaultRoute = body.enabled;
 				send(res, 200, { success: true, data: { ok: true } });
 			} catch (e) {
 				send(res, 400, { success: false, error: { code: 'INVALID_REQUEST', message: String(e) } });

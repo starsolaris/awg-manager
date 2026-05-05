@@ -1666,16 +1666,6 @@ class ApiClient {
 		);
 	}
 
-	async setSubscriptionDefaultRoute(id: string, enabled: boolean): Promise<void> {
-		await this.request(
-			`/singbox/subscriptions/default-route?id=${encodeURIComponent(id)}`,
-			{
-				method: 'POST',
-				body: JSON.stringify({ enabled }),
-			},
-		);
-	}
-
 	async deleteSubscriptionOrphans(id: string): Promise<void> {
 		await this.request(
 			`/singbox/subscriptions/orphans/delete?id=${encodeURIComponent(id)}`,

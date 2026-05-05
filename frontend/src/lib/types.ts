@@ -1473,7 +1473,6 @@ export interface Subscription {
 	orphanTags: string[];
 	activeMember: string;
 	enabled: boolean;
-	isDefaultRoute: boolean;
 }
 
 export interface SubscriptionRefreshResult {
