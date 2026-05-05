@@ -699,7 +699,11 @@ func main() {
 		}
 	}
 
-	delayChecker := singbox.NewDelayChecker(singboxOp.Clash(), singboxOp, eventBus)
+	delayChecker := singbox.NewDelayChecker(
+		singboxOp.Clash(),
+		&singboxAndSubLister{op: singboxOp, sub: subSvc},
+		eventBus,
+	)
 	singboxHandler := api.NewSingboxHandler(singboxOp, eventBus, delayChecker, testService)
 	clashProxy := api.NewClashProxy(singboxOp)
 	singboxConnsHandler := api.NewSingboxConnectionsHandler(ndmsQueries.Hotspot)
@@ -1697,4 +1701,21 @@ func (l *operatorLifecycle) Stop(ctx context.Context) error {
 
 func (l *operatorLifecycle) Start(ctx context.Context) error {
 	return l.op.Control(ctx, "start")
+}
+
+// singboxAndSubLister satisfies singbox.tunnelLister by combining the regular
+// sing-box tunnel list with the active outbound tags of enabled subscriptions.
+// This lets DelayChecker probe subscription active members with the same
+// periodic clash latency test it runs for regular sing-box tunnels.
+type singboxAndSubLister struct {
+	op  *singbox.Operator
+	sub *subscription.Service
+}
+
+func (l *singboxAndSubLister) ListTunnels(ctx context.Context) ([]singbox.TunnelInfo, error) {
+	return l.op.ListTunnels(ctx)
+}
+
+func (l *singboxAndSubLister) ListSubActiveTags() []string {
+	return l.sub.ListActiveMemberTags()
 }
