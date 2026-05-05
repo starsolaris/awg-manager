@@ -40,7 +40,7 @@ type Client struct {
 	appLog  *logging.ScopedLogger
 }
 
-// New creates a new RCI client with default timeout (10s).
+// New creates a new RCI client with default timeout (30s).
 func New() *Client {
 	return &Client{
 		http:    &http.Client{Timeout: defaultTimeout, Transport: sharedTransport},
