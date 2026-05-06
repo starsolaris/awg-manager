@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hoaxisr/awg-manager/internal/rci"
+	"github.com/hoaxisr/awg-manager/internal/ndms/transport"
 )
 
 // VersionInfo holds parsed response from /rci/show/version.
@@ -39,14 +39,16 @@ var (
 // Blocks until NDMS responds or timeout expires.
 // Should be called once at startup before any Get() calls.
 func Init(ctx context.Context, timeout time.Duration) error {
-	client := rci.NewWithTimeout(5 * time.Second)
+	client := transport.New(transport.NewSemaphore(1))
 	deadline := time.After(timeout)
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	fetch := func() (*VersionInfo, error) {
+		probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
 		var info VersionInfo
-		if err := client.Get(ctx, "/show/version", &info); err != nil {
+		if err := client.Get(probeCtx, "/show/version", &info); err != nil {
 			return nil, err
 		}
 		return &info, nil
