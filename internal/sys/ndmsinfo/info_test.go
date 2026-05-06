@@ -32,7 +32,3 @@ func TestIsAtLeast501A3(t *testing.T) {
 	}
 }
 
-func TestHasComponent(t *testing.T) {
-	Reset()
-	t.Cleanup(Reset)
-}

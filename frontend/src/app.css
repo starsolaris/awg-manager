@@ -1162,7 +1162,8 @@ label {
 }
 
 /* Base active state for any .chip without a -level-* / -group-* modifier.
-   Specializations below have higher specificity (0,2,0 vs 0,1,0) and override. */
+   Specializations below match this rule's specificity (0,2,0); they win by
+   source order — keep this rule above the .chip-level-* / .chip-group-* blocks. */
 .chip.chip-active {
 	background: var(--color-accent);
 	color: white;
