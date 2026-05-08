@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"time"
 )
@@ -115,8 +116,19 @@ func (o *Orchestrator) Bootstrap() error {
 		case a:
 			o.enabled[slot] = true
 		case d:
-			// File exists only in disabled/ — slot stays disabled.
-			o.enabled[slot] = false
+			if meta.AlwaysOn {
+				// AlwaysOn slot found only in disabled/ — possible after a
+				// downgrade-and-disable cycle on a previous build. Promote
+				// it back to active/ so sing-box's -C (non-recursive) sees
+				// it and our enabled-map reflects the AlwaysOn invariant.
+				if err := os.Rename(o.disabledPath(meta), o.activePath(meta)); err != nil {
+					return fmt.Errorf("bootstrap %s: promote from disabled: %w", slot, err)
+				}
+				o.enabled[slot] = true
+			} else {
+				// Non-AlwaysOn: file in disabled/ means user-disabled.
+				o.enabled[slot] = false
+			}
 		default:
 			// No file. AlwaysOn stays true (the producer must Save
 			// its initial content); regular slots default to false.

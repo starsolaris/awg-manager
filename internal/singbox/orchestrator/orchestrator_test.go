@@ -371,6 +371,69 @@ func TestDebouncerCoalescesMultipleSaves(t *testing.T) {
 	}
 }
 
+func TestBootstrapPromotesAlwaysOnSlotFromDisabled(t *testing.T) {
+	// Migration scenario: an earlier build that treated SlotTunnels as
+	// non-AlwaysOn parked 10-tunnels.json under disabled/. The new
+	// AlwaysOn registration must promote it back to active/ on Bootstrap
+	// so sing-box's -C (non-recursive) sees the file again, and the
+	// in-memory enabled map matches the AlwaysOn invariant.
+	o, dir := newTestOrch(t)
+	_ = o.Register(SlotMeta{Slot: SlotTunnels, Filename: "10-tunnels.json", AlwaysOn: true})
+	if err := os.MkdirAll(filepath.Join(dir, "disabled"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "disabled", "10-tunnels.json"), []byte(`{"stale":1}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := o.Bootstrap(); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "disabled", "10-tunnels.json")); !os.IsNotExist(err) {
+		t.Errorf("file should have been moved out of disabled/: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "10-tunnels.json")); err != nil {
+		t.Errorf("file should now be in active/: %v", err)
+	}
+	snap := o.Snapshot()
+	if len(snap) != 1 || !snap[0].Enabled {
+		t.Errorf("AlwaysOn tunnels slot should be enabled after bootstrap: %+v", snap)
+	}
+}
+
+func TestReloadStartsForBothAlwaysOnContentAndConsumerSlot(t *testing.T) {
+	// Composition: an AlwaysOn slot with HasContent=true AND a
+	// non-AlwaysOn slot enabled both contribute "active work" — neither
+	// path should shadow the other.
+	fp := &fakeProc{}
+	dir := t.TempDir()
+	o := New(dir, fp)
+	_ = o.Register(SlotMeta{
+		Slot:       SlotTunnels,
+		Filename:   "10-tunnels.json",
+		AlwaysOn:   true,
+		HasContent: func() bool { return true },
+	})
+	_ = o.Register(SlotMeta{Slot: SlotRouter, Filename: "20-router.json"})
+	if err := o.Bootstrap(); err != nil {
+		t.Fatal(err)
+	}
+	if err := o.Save(SlotTunnels, []byte(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := o.Save(SlotRouter, []byte(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := o.SetEnabled(SlotRouter, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := o.Reload(); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if fp.starts != 1 {
+		t.Errorf("expected 1 start (both paths active), got %d", fp.starts)
+	}
+}
+
 func TestBootstrapResolvesBothLocationsConflict(t *testing.T) {
 	o, dir := newTestOrch(t)
 	_ = o.Register(SlotMeta{Slot: SlotRouter, Filename: "20-router.json"})
