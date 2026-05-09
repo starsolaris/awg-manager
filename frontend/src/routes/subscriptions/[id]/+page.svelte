@@ -63,7 +63,7 @@
 	<title>{subscription?.label ?? 'Подписка'} - AWG Manager</title>
 </svelte:head>
 
-<PageContainer>
+<PageContainer width="full">
 	{#if loading}
 		<div>Загрузка...</div>
 	{:else if error || !subscription}

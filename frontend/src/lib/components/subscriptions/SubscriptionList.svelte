@@ -5,8 +5,9 @@
 	interface Props {
 		subscriptions: Subscription[];
 		onAdd: () => void;
+		ondelete?: (id: string) => void;
 	}
-	let { subscriptions, onAdd }: Props = $props();
+	let { subscriptions, onAdd, ondelete }: Props = $props();
 </script>
 
 {#if subscriptions.length === 0}
@@ -22,7 +23,7 @@
 {:else}
 	<div class="list">
 		{#each subscriptions as sub (sub.id)}
-			<SubscriptionCard subscription={sub} />
+			<SubscriptionCard subscription={sub} {ondelete} />
 		{/each}
 	</div>
 {/if}

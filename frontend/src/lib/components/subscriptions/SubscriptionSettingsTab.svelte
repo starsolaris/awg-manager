@@ -8,7 +8,7 @@
 	import { goto } from '$app/navigation';
 	import HeadersTextarea from './HeadersTextarea.svelte';
 	import { parseHeadersText, serializeHeaders } from './headersParser';
-	import { Button, Dropdown } from '$lib/components/ui';
+	import { Button, Dropdown, Modal } from '$lib/components/ui';
 	import { untrack } from 'svelte';
 
 	interface Props {
@@ -37,7 +37,6 @@
 	let confirmDelete = $state(false);
 	let deleting = $state(false);
 
-	// Re-sync form state when subscription prop changes after parent reload.
 	$effect(() => {
 		label = subscription.label;
 		url = subscription.url;
@@ -94,45 +93,66 @@
 		deleting = true;
 		try {
 			await api.deleteSubscription(subscription.id);
-			goto('/');
+			goto('/?tab=subscriptions');
 		} finally {
 			deleting = false;
 		}
 	}
 </script>
 
+<div class="settings-toolbar">
+	<Button variant="primary" disabled={saving} loading={saving} onclick={save}>
+		{saving ? 'Сохраняем...' : 'Сохранить'}
+	</Button>
+	<Button variant="danger" onclick={() => (confirmDelete = true)}>Удалить подписку</Button>
+</div>
+
 <form
-	class="form"
+	class="form-grid"
 	onsubmit={(e) => {
 		e.preventDefault();
 		save();
 	}}
 >
-	<label><span>Название</span><input bind:value={label} /></label>
-	{#if subscription.isInline}
-		<div class="inline-info">
-			<div class="inline-badge">Список вручную</div>
-			<div class="inline-summary">
-				{subscription.members.length === 1
-					? '1 сервер'
-					: subscription.members.length < 5
-						? `${subscription.members.length} сервера`
-						: `${subscription.members.length} серверов`}
-				· редактирование во вкладке «Серверы»
+	<section class="col">
+		<h3 class="col-title">Источник</h3>
+		<label class="row">
+			<span class="lbl">Название</span>
+			<input class="inp" bind:value={label} />
+		</label>
+		{#if subscription.isInline}
+			<div class="inline-info">
+				<div class="inline-badge">Список вручную</div>
+				<div class="inline-summary">
+					{subscription.members.length === 1
+						? '1 сервер'
+						: subscription.members.length < 5
+							? `${subscription.members.length} сервера`
+							: `${subscription.members.length} серверов`}
+					· редактирование во вкладке «Серверы»
+				</div>
 			</div>
-		</div>
-	{:else}
-		<label><span>URL</span><input bind:value={url} /></label>
-		<HeadersTextarea bind:value={headersText} />
-		<Dropdown
-			label="Авто-обновление"
-			bind:value={refreshHoursStr}
-			options={refreshOptions}
-		/>
-	{/if}
+		{:else}
+			<label class="row">
+				<span class="lbl">URL</span>
+				<input class="inp" bind:value={url} />
+			</label>
+			<HeadersTextarea bind:value={headersText} />
+			<Dropdown
+				label="Авто-обновление"
+				bind:value={refreshHoursStr}
+				options={refreshOptions}
+				fullWidth
+			/>
+		{/if}
+		<label class="chk">
+			<input type="checkbox" bind:checked={enabled} />
+			<span>Включена</span>
+		</label>
+	</section>
 
-	<div class="mode-section">
-		<span class="mode-label">Режим выбора сервера</span>
+	<section class="col">
+		<h3 class="col-title">Режим выбора сервера</h3>
 		<div class="mode-grid" role="radiogroup" aria-label="Режим выбора сервера">
 			<button
 				type="button"
@@ -143,9 +163,7 @@
 				onclick={() => (mode = 'selector')}
 			>
 				<div class="mode-title">Ручной выбор</div>
-				<div class="mode-desc">
-					Сервер переключается вручную из списка.
-				</div>
+				<div class="mode-desc">Сервер переключается вручную из списка.</div>
 				{#if mode === 'selector'}
 					<span class="mode-check" aria-hidden="true">
 						<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
@@ -173,67 +191,107 @@
 		</div>
 		{#if mode === 'urltest'}
 			<div class="urltest-block">
-				<label>
-					<span>URL для проверки</span>
-					<input type="url" bind:value={utUrl} placeholder={DEFAULT_SUBSCRIPTION_URLTEST.url} />
+				<label class="row">
+					<span class="lbl">URL для проверки</span>
+					<input
+						class="inp"
+						type="url"
+						bind:value={utUrl}
+						placeholder={DEFAULT_SUBSCRIPTION_URLTEST.url}
+					/>
 				</label>
 				<div class="ut-row">
 					<label class="ut-col">
-						<span>Интервал, сек</span>
-						<input type="number" min="10" max="3600" bind:value={utIntervalSec} />
+						<span class="lbl">Интервал, сек</span>
+						<input class="inp" type="number" min="10" max="3600" bind:value={utIntervalSec} />
 					</label>
 					<label class="ut-col">
-						<span>Допуск, мс</span>
-						<input type="number" min="0" max="2000" bind:value={utToleranceMs} />
+						<span class="lbl">Допуск, мс</span>
+						<input class="inp" type="number" min="0" max="2000" bind:value={utToleranceMs} />
 					</label>
 				</div>
 			</div>
 		{/if}
-	</div>
-
-	<label class="chk"><input type="checkbox" bind:checked={enabled} /> Включена</label>
-	<div class="actions">
-		<Button type="submit" variant="primary" disabled={saving} loading={saving}>
-			{saving ? 'Сохраняем...' : 'Сохранить'}
-		</Button>
-	</div>
+	</section>
 </form>
 
-<div class="danger-zone">
-	{#if !confirmDelete}
-		<Button variant="danger" onclick={() => (confirmDelete = true)}>Удалить подписку</Button>
-	{:else}
-		<div>Удалить подписку и все её ресурсы (sing-box outbound'ы, NDMS Proxy)?</div>
-		<div class="confirm-actions">
-			<Button variant="danger" disabled={deleting} loading={deleting} onclick={doDelete}>
-				Удалить
-			</Button>
-			<Button variant="ghost" onclick={() => (confirmDelete = false)}>Отмена</Button>
-		</div>
-	{/if}
-</div>
+<Modal
+	open={confirmDelete}
+	title="Удалить подписку?"
+	size="md"
+	onclose={() => {
+		if (deleting) return;
+		confirmDelete = false;
+	}}
+>
+	<p>
+		Подписка <strong>{subscription.label || subscription.url}</strong> будет
+		удалена вместе с её sing-box outbound'ами и NDMS Proxy
+		<code class="mono">Proxy{subscription.proxyIndex}</code>.
+	</p>
+	{#snippet actions()}
+		<Button variant="ghost" disabled={deleting} onclick={() => (confirmDelete = false)}>
+			Отмена
+		</Button>
+		<Button variant="danger" disabled={deleting} loading={deleting} onclick={doDelete}>
+			{deleting ? 'Удаляем...' : 'Удалить'}
+		</Button>
+	{/snippet}
+</Modal>
 
 <style>
-	.form { display: flex; flex-direction: column; gap: 0.7rem; max-width: 640px; }
-	.form label { display: flex; flex-direction: column; gap: 0.3rem; }
-	.form label.chk { flex-direction: row; align-items: center; gap: 0.5rem; }
-	input {
+	.settings-toolbar {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.5rem;
+		margin-bottom: 1rem;
+	}
+
+	.form-grid {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 1.25rem;
+	}
+	@media (min-width: 900px) {
+		.form-grid { grid-template-columns: 1fr 1fr; }
+	}
+
+	.col {
+		display: flex;
+		flex-direction: column;
+		gap: 0.7rem;
+		padding: 1rem 1.1rem;
+		background: var(--color-bg-secondary, var(--color-bg-primary));
+		border: 1px solid var(--color-border);
+		border-radius: 8px;
+	}
+	.col-title {
+		margin: 0 0 0.3rem;
+		font-size: 0.78rem;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		color: var(--color-text-muted);
+		font-weight: 600;
+	}
+
+	.row { display: flex; flex-direction: column; gap: 0.3rem; }
+	.lbl { font-size: 0.85rem; color: var(--color-text-muted); }
+	.inp {
 		padding: 0.45rem 0.6rem;
 		border: 1px solid var(--color-border);
 		border-radius: 4px;
 		background: var(--color-bg-primary);
 		color: var(--color-text-primary);
+		width: 100%;
+		box-sizing: border-box;
 	}
-	.actions { display: flex; justify-content: flex-end; }
-	.danger-zone {
-		margin-top: 1.5rem;
-		padding-top: 1rem;
-		border-top: 1px solid var(--color-border);
+	.chk {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		gap: 0.5rem;
 	}
-	.confirm-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
 
-	.mode-section { display: flex; flex-direction: column; gap: 0.5rem; }
-	.mode-label { font-size: 0.85rem; color: var(--color-text-muted); }
 	.mode-grid {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
@@ -282,22 +340,19 @@
 		flex-direction: column;
 		gap: 0.5rem;
 		padding: 0.6rem 0.8rem;
-		background: var(--color-bg-secondary, var(--color-bg-primary));
+		background: var(--color-bg-primary);
 		border: 1px dashed var(--color-border);
 		border-radius: 4px;
 	}
 	.ut-row { display: flex; gap: 0.6rem; }
 	.ut-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; }
-	@media (max-width: 480px) {
-		.mode-grid { grid-template-columns: 1fr; }
-		.ut-row { flex-direction: column; }
-	}
+
 	.inline-info {
 		display: flex;
 		flex-direction: column;
 		gap: 0.35rem;
 		padding: 0.6rem 0.8rem;
-		background: var(--color-bg-secondary, var(--color-bg-primary));
+		background: var(--color-bg-primary);
 		border: 1px dashed var(--color-border);
 		border-radius: 4px;
 	}
@@ -316,5 +371,12 @@
 	.inline-summary {
 		font-size: 0.78rem;
 		color: var(--color-text-muted);
+	}
+
+	.mono { font-family: var(--font-mono, ui-monospace, monospace); }
+
+	@media (max-width: 600px) {
+		.mode-grid { grid-template-columns: 1fr; }
+		.ut-row { flex-direction: column; }
 	}
 </style>

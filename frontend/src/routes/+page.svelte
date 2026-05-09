@@ -189,6 +189,30 @@
 		createModalOpen = true;
 	}
 
+	let pendingSubscriptionDelete = $state<string | null>(null);
+	let deletingSubscription = $state(false);
+
+	function requestSubscriptionDelete(id: string): void {
+		pendingSubscriptionDelete = id;
+	}
+	async function confirmSubscriptionDelete(): Promise<void> {
+		if (!pendingSubscriptionDelete || deletingSubscription) return;
+		deletingSubscription = true;
+		try {
+			await api.deleteSubscription(pendingSubscriptionDelete);
+			pendingSubscriptionDelete = null;
+			await subscriptionsStore.refetch();
+		} finally {
+			deletingSubscription = false;
+		}
+	}
+	const pendingSubscriptionLabel = $derived.by(() => {
+		const id = pendingSubscriptionDelete;
+		if (!id) return '';
+		const s = subscriptionsList.find((x) => x.id === id);
+		return s ? s.label || s.url : id;
+	});
+
 	const subscriptionsActiveCards = $derived(
 		($subscriptionsStore.data ?? [])
 			.filter((s) => s.enabled && s.activeMember)
@@ -637,7 +661,11 @@
 						<Button variant="primary" size="md" onclick={() => openWizard('url')}>+ Добавить</Button>
 					</div>
 				</div>
-				<SubscriptionList subscriptions={subscriptionsList} onAdd={() => openWizard('url')} />
+				<SubscriptionList
+				subscriptions={subscriptionsList}
+				onAdd={() => openWizard('url')}
+				ondelete={requestSubscriptionDelete}
+			/>
 			{/if}
 		{:else}
 			<SingboxInstallBanner />
@@ -648,7 +676,7 @@
 						{singboxTunnelsList.length === 1 ? 'туннель' : singboxTunnelsList.length < 5 ? 'туннеля' : 'туннелей'}
 					</span>
 					<div class="toolbar-actions">
-						<Button variant="primary" size="md" onclick={() => openWizard('single')}>+ Добавить</Button>
+						<Button variant="primary" size="md" onclick={() => openWizard('choose')}>+ Добавить</Button>
 					</div>
 				</div>
 			{/if}
@@ -769,6 +797,38 @@
 />
 
 <AddTunnelWizard bind:open={createModalOpen} preselect={wizardPreselect} />
+
+<Modal
+	open={pendingSubscriptionDelete !== null}
+	title="Удалить подписку?"
+	size="md"
+	onclose={() => {
+		if (deletingSubscription) return;
+		pendingSubscriptionDelete = null;
+	}}
+>
+	<p>
+		Подписка <strong>{pendingSubscriptionLabel}</strong> будет удалена
+		вместе с её sing-box outbound'ами и NDMS Proxy-интерфейсом.
+	</p>
+	{#snippet actions()}
+		<Button
+			variant="ghost"
+			disabled={deletingSubscription}
+			onclick={() => (pendingSubscriptionDelete = null)}
+		>
+			Отмена
+		</Button>
+		<Button
+			variant="danger"
+			disabled={deletingSubscription}
+			loading={deletingSubscription}
+			onclick={confirmSubscriptionDelete}
+		>
+			{deletingSubscription ? 'Удаляем...' : 'Удалить'}
+		</Button>
+	{/snippet}
+</Modal>
 
 {#if detailId}
 	{@const managed = awgList.find((x) => x.id === detailId)}
