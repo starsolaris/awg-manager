@@ -1,6 +1,9 @@
 package subscription
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // BuildSelector emits a sing-box selector outbound JSON wrapping memberTags.
 // defaultTag must be one of memberTags; if empty, the first member is used.
@@ -19,6 +22,45 @@ func BuildSelector(selectorTag string, memberTags []string, defaultTag string) j
 	}
 	raw, _ := json.Marshal(out)
 	return raw
+}
+
+// BuildURLTest emits a sing-box urltest outbound JSON wrapping memberTags.
+// Sing-box probes each member by HEADing url every interval and routes
+// through the fastest. Tolerance is the RTT advantage (in ms) that a
+// faster member must hold before sing-box switches off the current one
+// — prevents oscillation between members with similar latency.
+func BuildURLTest(selectorTag string, memberTags []string, cfg URLTestConfig) json.RawMessage {
+	if cfg.URL == "" {
+		cfg.URL = DefaultURLTestConfig().URL
+	}
+	if cfg.IntervalSec <= 0 {
+		cfg.IntervalSec = DefaultURLTestConfig().IntervalSec
+	}
+	if cfg.ToleranceMs < 0 {
+		cfg.ToleranceMs = DefaultURLTestConfig().ToleranceMs
+	}
+	out := map[string]any{
+		"type":      "urltest",
+		"tag":       selectorTag,
+		"outbounds": memberTags,
+		"url":       cfg.URL,
+		"interval":  fmt.Sprintf("%ds", cfg.IntervalSec),
+	}
+	if cfg.ToleranceMs > 0 {
+		out["tolerance"] = cfg.ToleranceMs
+	}
+	raw, _ := json.Marshal(out)
+	return raw
+}
+
+// BuildGroupOutbound dispatches BuildSelector vs BuildURLTest based on
+// the subscription's effective mode. Centralised so service.go has a
+// single call site for both refresh- and select-time materialisation.
+func BuildGroupOutbound(sub Subscription, memberTags []string, defaultTag string) json.RawMessage {
+	if sub.EffectiveMode() == ModeURLTest {
+		return BuildURLTest(sub.SelectorTag, memberTags, sub.EffectiveURLTest())
+	}
+	return BuildSelector(sub.SelectorTag, memberTags, defaultTag)
 }
 
 // BuildMixedInbound emits the SOCKS5/HTTP listener that pairs with the

@@ -236,9 +236,10 @@ func (s *Service) applyDiff(ctx context.Context, sub *Subscription, diff DiffRes
 		memberTags = append(memberTags, e.Tag)
 	}
 
-	// Selector — remove old (idempotent) then add fresh.
+	// Selector / urltest — remove old (idempotent) then add fresh.
+	// BuildGroupOutbound dispatches by sub.Mode.
 	s.mutator.RemoveOutbound(sub.SelectorTag)
-	if err := s.mutator.AddOutbound(sub.SelectorTag, BuildSelector(sub.SelectorTag, memberTags, "")); err != nil {
+	if err := s.mutator.AddOutbound(sub.SelectorTag, BuildGroupOutbound(*sub, memberTags, "")); err != nil {
 		return err
 	}
 
@@ -347,8 +348,33 @@ func (s *Service) Update(id string, patch UpdatePatch) (*Subscription, error) {
 	mu := s.lockSub(id)
 	mu.Lock()
 	defer mu.Unlock()
-	return s.store.Update(id, patch)
+	sub, err := s.store.Update(id, patch)
+	if err != nil {
+		return nil, err
+	}
+	// Mode / urltest config changes require a fresh group outbound in
+	// sing-box config and a SIGHUP so the new wrapper takes effect.
+	// Other patch fields (label / URL / headers / refresh-cadence /
+	// enabled) only mutate metadata and don't need a config rewrite.
+	if patch.Mode != nil || patch.URLTest != nil {
+		s.mutator.RemoveOutbound(sub.SelectorTag)
+		if err := s.mutator.AddOutbound(sub.SelectorTag, BuildGroupOutbound(*sub, sub.MemberTags, sub.ActiveMember)); err != nil {
+			return sub, fmt.Errorf("rebuild group outbound: %w", err)
+		}
+		if err := s.mutator.Reload(context.Background()); err != nil {
+			return sub, fmt.Errorf("reload after mode change: %w", err)
+		}
+	}
+	return sub, nil
 }
+
+// ErrActiveMemberOnURLTest is returned by SetActiveMember when the
+// caller tries to pin a member on a urltest-mode subscription. Sing-box's
+// Clash-compat API only exposes member-selection on `selector` outbounds —
+// urltest groups are auto-managed and reject the switch with a runtime
+// error. Callers (HTTP handlers) should map this to 409 Conflict so the
+// UI can hide the picker rather than spam errors.
+var ErrActiveMemberOnURLTest = errors.New("subscription: SetActiveMember not supported in urltest mode")
 
 // SetActiveMember updates the selector's "default" pointer to memberTag.
 // It updates the config slot for restart persistence and persists the active
@@ -363,6 +389,9 @@ func (s *Service) SetActiveMember(ctx context.Context, id, memberTag string) err
 	if err != nil {
 		return err
 	}
+	if sub.EffectiveMode() == ModeURLTest {
+		return ErrActiveMemberOnURLTest
+	}
 	found := false
 	for _, m := range sub.MemberTags {
 		if m == memberTag {
@@ -376,8 +405,12 @@ func (s *Service) SetActiveMember(ctx context.Context, id, memberTag string) err
 
 	// 1. Update config slot's selector.default for restart persistence.
 	//    NOT followed by Reload — clash API handles the runtime switch.
+	//    For urltest mode: BuildURLTest ignores defaultTag (urltest has
+	//    no `default` field). The Clash API call below still pins the
+	//    chosen member as a temporary override until sing-box's next
+	//    auto-test interval, matching mihomo/sing-box semantics.
 	s.mutator.RemoveOutbound(sub.SelectorTag)
-	if err := s.mutator.AddOutbound(sub.SelectorTag, BuildSelector(sub.SelectorTag, sub.MemberTags, memberTag)); err != nil {
+	if err := s.mutator.AddOutbound(sub.SelectorTag, BuildGroupOutbound(*sub, sub.MemberTags, memberTag)); err != nil {
 		return err
 	}
 

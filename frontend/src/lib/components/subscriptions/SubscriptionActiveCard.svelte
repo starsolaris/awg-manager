@@ -55,6 +55,7 @@
     );
     const traffic = $derived($singboxTraffic.get(activeMember.tag));
     const endpointText = $derived(`${activeMember.server}:${activeMember.port}`);
+    const isURLTest = $derived(subscription.mode === 'urltest');
 
     type State = 'ok' | 'slow' | 'fail' | 'unknown';
     const cardState: State = $derived.by(() => {
@@ -173,22 +174,27 @@
     </div>
 
     <div class="server-row">
-        <span class="label">Сервер</span>
+        <span class="label">{isURLTest ? 'Авто' : 'Сервер'}</span>
         <div class="picker-anchor">
             <div class="server-control">
                 <button
                     class="server-btn"
+                    class:server-btn-readonly={isURLTest}
                     onclick={(e) => {
                         e.stopPropagation();
+                        if (isURLTest) return;
                         pickerOpen = !pickerOpen;
                     }}
-                    aria-haspopup="listbox"
-                    aria-expanded={pickerOpen}
+                    aria-haspopup={isURLTest ? undefined : 'listbox'}
+                    aria-expanded={isURLTest ? undefined : pickerOpen}
+                    title={isURLTest ? 'Sing-box выбирает самый быстрый сервер автоматически' : ''}
                 >
                     <span class="server-text" title={showEndpoint ? endpointText : ''}>
                         {showEndpoint ? endpointText : '•••••••••'}
                     </span>
-                    <span class="caret" aria-hidden="true">▾</span>
+                    {#if !isURLTest}
+                        <span class="caret" aria-hidden="true">▾</span>
+                    {/if}
                 </button>
                 <button
                     type="button"
@@ -207,7 +213,7 @@
                     {/if}
                 </button>
             </div>
-            {#if pickerOpen}
+            {#if pickerOpen && !isURLTest}
                 <SubscriptionMemberPicker
                     members={subscription.members ?? []}
                     activeMemberTag={subscription.activeMember}
@@ -387,6 +393,8 @@
         min-width: 0;
     }
     .server-btn:hover { border-color: var(--color-accent); }
+    .server-btn-readonly { cursor: default; }
+    .server-btn-readonly:hover { border-color: var(--color-border); }
     .server-text {
         font-family: var(--font-mono, ui-monospace, monospace);
         font-size: 0.78rem;

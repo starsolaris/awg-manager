@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -38,6 +39,15 @@ type SubscriptionMemberDTO struct {
 	Security  string `json:"security,omitempty" example:"tls"`
 }
 
+// SubscriptionURLTestDTO carries urltest tuning. Only meaningful when
+// SubscriptionDTO.Mode == "urltest"; when absent or mode is "selector"
+// the consumer should ignore it.
+type SubscriptionURLTestDTO struct {
+	URL         string `json:"url" example:"https://www.gstatic.com/generate_204"`
+	IntervalSec int    `json:"intervalSec" example:"60"`
+	ToleranceMs int    `json:"toleranceMs" example:"50"`
+}
+
 // SubscriptionDTO mirrors subscription.Subscription for OpenAPI exposure.
 type SubscriptionDTO struct {
 	ID           string                  `json:"id" example:"abc123"`
@@ -56,6 +66,8 @@ type SubscriptionDTO struct {
 	OrphanTags   []string                `json:"orphanTags"`
 	ActiveMember string                  `json:"activeMember" example:"sub-abc-aaaa"`
 	Enabled      bool                    `json:"enabled"`
+	Mode         string                  `json:"mode" example:"selector"`
+	URLTest      *SubscriptionURLTestDTO `json:"urlTest,omitempty"`
 }
 
 // SubscriptionHeader is a single custom HTTP header for the fetch request.
@@ -78,21 +90,25 @@ type SubscriptionResponse struct {
 
 // CreateSubscriptionRequest is the body for POST /api/singbox/subscriptions/create.
 type CreateSubscriptionRequest struct {
-	Label        string               `json:"label"`
-	URL          string               `json:"url"`
-	Headers      []SubscriptionHeader `json:"headers"`
-	RefreshHours int                  `json:"refreshHours"`
-	Enabled      bool                 `json:"enabled"`
+	Label        string                  `json:"label"`
+	URL          string                  `json:"url"`
+	Headers      []SubscriptionHeader    `json:"headers"`
+	RefreshHours int                     `json:"refreshHours"`
+	Enabled      bool                    `json:"enabled"`
+	Mode         string                  `json:"mode,omitempty"` // "selector" (default) | "urltest"
+	URLTest      *SubscriptionURLTestDTO `json:"urlTest,omitempty"`
 }
 
 // UpdateSubscriptionRequest is the body for PUT /api/singbox/subscriptions/update.
 // All fields are optional; absent fields leave the stored value unchanged.
 type UpdateSubscriptionRequest struct {
-	Label        *string               `json:"label,omitempty"`
-	URL          *string               `json:"url,omitempty"`
-	Headers      *[]SubscriptionHeader `json:"headers,omitempty"`
-	RefreshHours *int                  `json:"refreshHours,omitempty"`
-	Enabled      *bool                 `json:"enabled,omitempty"`
+	Label        *string                 `json:"label,omitempty"`
+	URL          *string                 `json:"url,omitempty"`
+	Headers      *[]SubscriptionHeader   `json:"headers,omitempty"`
+	RefreshHours *int                    `json:"refreshHours,omitempty"`
+	Enabled      *bool                   `json:"enabled,omitempty"`
+	Mode         *string                 `json:"mode,omitempty"`
+	URLTest      *SubscriptionURLTestDTO `json:"urlTest,omitempty"`
 }
 
 // ActiveMemberRequest is the body for POST /api/singbox/subscriptions/active-member.
@@ -130,6 +146,16 @@ func toSubscriptionDTO(s subscription.Subscription) SubscriptionDTO {
 			Security:  m.Security,
 		}
 	}
+	mode := string(s.EffectiveMode())
+	var urltest *SubscriptionURLTestDTO
+	if s.EffectiveMode() == subscription.ModeURLTest {
+		ut := s.EffectiveURLTest()
+		urltest = &SubscriptionURLTestDTO{
+			URL:         ut.URL,
+			IntervalSec: ut.IntervalSec,
+			ToleranceMs: ut.ToleranceMs,
+		}
+	}
 	return SubscriptionDTO{
 		ID:           s.ID,
 		Label:        s.Label,
@@ -147,6 +173,38 @@ func toSubscriptionDTO(s subscription.Subscription) SubscriptionDTO {
 		OrphanTags:   orphans,
 		ActiveMember: s.ActiveMember,
 		Enabled:      s.Enabled,
+		Mode:         mode,
+		URLTest:      urltest,
+	}
+}
+
+// parseSubscriptionMode validates a mode string from a request body. An
+// empty string maps to ModeSelector (back-compat default). Anything
+// outside the closed set returns an error so the caller can 400.
+func parseSubscriptionMode(s string) (subscription.SubscriptionMode, error) {
+	switch s {
+	case "":
+		return subscription.ModeSelector, nil
+	case string(subscription.ModeSelector):
+		return subscription.ModeSelector, nil
+	case string(subscription.ModeURLTest):
+		return subscription.ModeURLTest, nil
+	default:
+		return "", fmt.Errorf("invalid mode %q (expected \"selector\" or \"urltest\")", s)
+	}
+}
+
+// urlTestDTOToConfig copies a request DTO into the domain config.
+// Returns nil when the input is nil so callers can leave URLTest
+// unchanged on Update.
+func urlTestDTOToConfig(in *SubscriptionURLTestDTO) *subscription.URLTestConfig {
+	if in == nil {
+		return nil
+	}
+	return &subscription.URLTestConfig{
+		URL:         in.URL,
+		IntervalSec: in.IntervalSec,
+		ToleranceMs: in.ToleranceMs,
 	}
 }
 
@@ -208,12 +266,19 @@ func (h *SubscriptionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		response.ErrorWithStatus(w, http.StatusBadRequest, err.Error(), "INVALID_HEADERS")
 		return
 	}
+	mode, err := parseSubscriptionMode(req.Mode)
+	if err != nil {
+		response.ErrorWithStatus(w, http.StatusBadRequest, err.Error(), "INVALID_MODE")
+		return
+	}
 	in := subscription.CreateInput{
 		Label:        req.Label,
 		URL:          req.URL,
 		Headers:      fromSubscriptionHeaders(req.Headers),
 		RefreshHours: req.RefreshHours,
 		Enabled:      req.Enabled,
+		Mode:         mode,
+		URLTest:      urlTestDTOToConfig(req.URLTest),
 	}
 	sub, err := h.svc.Create(r.Context(), in)
 	if err != nil {
@@ -270,6 +335,17 @@ func (h *SubscriptionHandler) Update(w http.ResponseWriter, r *http.Request) {
 		hh := fromSubscriptionHeaders(*req.Headers)
 		patch.Headers = &hh
 	}
+	if req.Mode != nil {
+		mode, err := parseSubscriptionMode(*req.Mode)
+		if err != nil {
+			response.ErrorWithStatus(w, http.StatusBadRequest, err.Error(), "INVALID_MODE")
+			return
+		}
+		patch.Mode = &mode
+	}
+	if req.URLTest != nil {
+		patch.URLTest = urlTestDTOToConfig(req.URLTest)
+	}
 	sub, err := h.svc.Update(id, patch)
 	if err != nil {
 		response.InternalError(w, err.Error())
@@ -322,6 +398,11 @@ func (h *SubscriptionHandler) ActiveMember(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if err := h.svc.SetActiveMember(r.Context(), id, req.MemberTag); err != nil {
+		if errors.Is(err, subscription.ErrActiveMemberOnURLTest) {
+			response.ErrorWithStatus(w, http.StatusConflict, err.Error(),
+				"ACTIVE_MEMBER_ON_URLTEST")
+			return
+		}
 		response.InternalError(w, err.Error())
 		return
 	}

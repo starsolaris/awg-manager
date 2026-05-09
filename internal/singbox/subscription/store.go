@@ -78,6 +78,29 @@ func newID() string {
 func (s *Store) Create(in CreateInput) (*Subscription, error) {
 	id := newID()
 	short := id[:8]
+	mode := in.Mode
+	if mode == "" {
+		mode = ModeSelector
+	}
+	var urlTest *URLTestConfig
+	if mode == ModeURLTest {
+		cfg := DefaultURLTestConfig()
+		if in.URLTest != nil {
+			if in.URLTest.URL != "" {
+				cfg.URL = in.URLTest.URL
+			}
+			if in.URLTest.IntervalSec > 0 {
+				cfg.IntervalSec = in.URLTest.IntervalSec
+			}
+			// ToleranceMs == 0 is meaningful (always switch on any
+			// latency advantage); only negative values fall through
+			// to the default. Matches EffectiveURLTest contract.
+			if in.URLTest.ToleranceMs >= 0 {
+				cfg.ToleranceMs = in.URLTest.ToleranceMs
+			}
+		}
+		urlTest = &cfg
+	}
 	sub := &Subscription{
 		ID:           id,
 		Label:        in.Label,
@@ -91,6 +114,8 @@ func (s *Store) Create(in CreateInput) (*Subscription, error) {
 		MemberTags:   []string{},
 		Members:      []MemberInfo{},
 		OrphanTags:   []string{},
+		Mode:         mode,
+		URLTest:      urlTest,
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -144,6 +169,17 @@ func (s *Store) Update(id string, patch UpdatePatch) (*Subscription, error) {
 	}
 	if patch.Enabled != nil {
 		sub.Enabled = *patch.Enabled
+	}
+	if patch.Mode != nil {
+		sub.Mode = *patch.Mode
+		if sub.Mode == ModeURLTest && sub.URLTest == nil {
+			cfg := DefaultURLTestConfig()
+			sub.URLTest = &cfg
+		}
+	}
+	if patch.URLTest != nil {
+		cp := *patch.URLTest
+		sub.URLTest = &cp
 	}
 	if err := s.saveLocked(); err != nil {
 		return nil, err

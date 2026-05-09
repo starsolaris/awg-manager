@@ -2,6 +2,7 @@ package subscription
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -368,6 +369,39 @@ func TestService_SetActiveMember_UsesClashAPI(t *testing.T) {
 	stored, _ := store.Get(sub.ID)
 	if stored.ActiveMember != secondMember {
 		t.Errorf("store.ActiveMember=%q want %q", stored.ActiveMember, secondMember)
+	}
+}
+
+func TestService_SetActiveMember_RejectsURLTestMode(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(
+			"vless://3a3b1c2e-9999-4321-aaaa-1234567890ab@h1.example:443?security=tls&sni=h\n",
+		))
+	}))
+	defer srv.Close()
+
+	store, _ := NewStore(filepath.Join(t.TempDir(), "sub.json"))
+	mutator := &fakeMutator{}
+	svc := NewService(store, mutator)
+	sub, err := svc.Create(context.Background(), CreateInput{
+		Label:   "test",
+		URL:     srv.URL,
+		Enabled: true,
+		Mode:    ModeURLTest,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	err = svc.SetActiveMember(context.Background(), sub.ID, sub.MemberTags[0])
+	if !errors.Is(err, ErrActiveMemberOnURLTest) {
+		t.Fatalf("expected ErrActiveMemberOnURLTest, got %v", err)
+	}
+	// Verify Clash API was NOT called — the urltest mode would 404 on
+	// sing-box. Bailing out at the service layer prevents the wasted
+	// call and gives the API handler a clean signal to map to 409.
+	if len(mutator.selectedSelector) != 0 {
+		t.Errorf("Clash API should not be called for urltest mode, got %v", mutator.selectedSelector)
 	}
 }
 

@@ -1460,6 +1460,20 @@ export interface SubscriptionMember {
 	security?: string;
 }
 
+export type SubscriptionMode = 'selector' | 'urltest';
+
+export interface SubscriptionURLTest {
+	url: string;
+	intervalSec: number;
+	toleranceMs: number;
+}
+
+export const DEFAULT_SUBSCRIPTION_URLTEST: SubscriptionURLTest = {
+	url: 'https://www.gstatic.com/generate_204',
+	intervalSec: 60,
+	toleranceMs: 50,
+};
+
 export interface Subscription {
 	id: string;
 	label: string;
@@ -1477,6 +1491,8 @@ export interface Subscription {
 	orphanTags: string[];
 	activeMember: string;
 	enabled: boolean;
+	mode: SubscriptionMode;
+	urlTest?: SubscriptionURLTest;
 }
 
 export interface SubscriptionRefreshResult {
@@ -1495,4 +1511,16 @@ export interface CreateSubscriptionInput {
 	headers: SubscriptionHeader[];
 	refreshHours: number;
 	enabled: boolean;
+	mode?: SubscriptionMode;
+	urlTest?: SubscriptionURLTest;
+}
+
+export interface UpdateSubscriptionInput {
+	label?: string;
+	url?: string;
+	headers?: SubscriptionHeader[];
+	refreshHours?: number;
+	enabled?: boolean;
+	mode?: SubscriptionMode;
+	urlTest?: SubscriptionURLTest;
 }

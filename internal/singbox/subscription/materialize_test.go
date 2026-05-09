@@ -52,3 +52,90 @@ func TestBuildRouteRule(t *testing.T) {
 		t.Errorf("route rule wrong: %+v", ob)
 	}
 }
+
+func TestBuildURLTest(t *testing.T) {
+	memberTags := []string{"sub-abc-1111", "sub-abc-2222"}
+	cfg := URLTestConfig{URL: "https://probe.example", IntervalSec: 30, ToleranceMs: 75}
+	out := BuildURLTest("sub-abc", memberTags, cfg)
+	var ob map[string]any
+	if err := json.Unmarshal(out, &ob); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if ob["type"] != "urltest" || ob["tag"] != "sub-abc" {
+		t.Errorf("urltest header wrong: %+v", ob)
+	}
+	if ob["url"] != "https://probe.example" {
+		t.Errorf("url=%v", ob["url"])
+	}
+	if ob["interval"] != "30s" {
+		t.Errorf("interval=%v (want 30s)", ob["interval"])
+	}
+	if ob["tolerance"] != float64(75) {
+		t.Errorf("tolerance=%v (want 75)", ob["tolerance"])
+	}
+	if outs, _ := ob["outbounds"].([]any); len(outs) != 2 {
+		t.Errorf("outbounds len=%d", len(outs))
+	}
+	if _, ok := ob["default"]; ok {
+		t.Errorf("urltest must not emit `default`: %+v", ob)
+	}
+}
+
+func TestBuildURLTest_AppliesDefaultsForZeroValues(t *testing.T) {
+	out := BuildURLTest("sub-abc", []string{"m"}, URLTestConfig{})
+	var ob map[string]any
+	json.Unmarshal(out, &ob)
+	def := DefaultURLTestConfig()
+	if ob["url"] != def.URL {
+		t.Errorf("url default not applied: %v", ob["url"])
+	}
+	if ob["interval"] != "60s" {
+		t.Errorf("interval default not applied: %v", ob["interval"])
+	}
+}
+
+func TestBuildURLTest_AcceptsZeroToleranceAsMeaningful(t *testing.T) {
+	// Sing-box treats tolerance=0 as "always switch on any RTT
+	// advantage". Negative is the sentinel for "use default 50ms".
+	out := BuildURLTest("sub-x", []string{"m"}, URLTestConfig{
+		URL:         "https://probe.example",
+		IntervalSec: 30,
+		ToleranceMs: 0,
+	})
+	var ob map[string]any
+	json.Unmarshal(out, &ob)
+	if _, ok := ob["tolerance"]; ok {
+		t.Errorf("zero tolerance must be omitted from JSON, got %v", ob["tolerance"])
+	}
+	out2 := BuildURLTest("sub-x", []string{"m"}, URLTestConfig{
+		URL:         "https://probe.example",
+		IntervalSec: 30,
+		ToleranceMs: -1,
+	})
+	var ob2 map[string]any
+	json.Unmarshal(out2, &ob2)
+	if ob2["tolerance"] != float64(50) {
+		t.Errorf("negative tolerance must apply default 50, got %v", ob2["tolerance"])
+	}
+}
+
+func TestBuildGroupOutbound_DispatchesByMode(t *testing.T) {
+	members := []string{"m1", "m2"}
+	subSel := Subscription{SelectorTag: "sub-x", Mode: ModeSelector}
+	subUT := Subscription{SelectorTag: "sub-x", Mode: ModeURLTest}
+	subEmpty := Subscription{SelectorTag: "sub-x"} // back-compat: "" → selector
+
+	check := func(t *testing.T, raw json.RawMessage, wantType string) {
+		t.Helper()
+		var ob map[string]any
+		if err := json.Unmarshal(raw, &ob); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if ob["type"] != wantType {
+			t.Errorf("type=%v, want %v", ob["type"], wantType)
+		}
+	}
+	check(t, BuildGroupOutbound(subSel, members, "m1"), "selector")
+	check(t, BuildGroupOutbound(subUT, members, "m1"), "urltest")
+	check(t, BuildGroupOutbound(subEmpty, members, "m1"), "selector")
+}

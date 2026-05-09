@@ -80,7 +80,8 @@ import type {
 	Subscription,
 	SubscriptionHeader,
 	SubscriptionRefreshResult,
-	CreateSubscriptionInput
+	CreateSubscriptionInput,
+	UpdateSubscriptionInput
 } from '$lib/types';
 
 interface ApiResponse<T> {
@@ -1642,7 +1643,7 @@ class ApiClient {
 
 	async updateSubscription(
 		id: string,
-		patch: Partial<CreateSubscriptionInput>,
+		patch: UpdateSubscriptionInput,
 	): Promise<Subscription> {
 		return this.request<Subscription>(
 			`/singbox/subscriptions/update?id=${encodeURIComponent(id)}`,
