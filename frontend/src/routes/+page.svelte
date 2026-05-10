@@ -298,23 +298,6 @@
 		}
 	});
 
-	onMount(() => {
-		// URL query wins over sessionStorage — lets other pages
-		// (e.g. /singbox/new) land the user on the right tab after an action.
-		const fromQuery = $page.url.searchParams.get('tab');
-		if (fromQuery === 'awg' || fromQuery === 'singbox' || fromQuery === 'subscriptions') {
-			activeTab = fromQuery;
-			return;
-		}
-		const stored = sessionStorage.getItem('tunnelsTab');
-		if (stored === 'awg' || stored === 'singbox' || stored === 'subscriptions') {
-			activeTab = stored;
-		}
-	});
-
-	$effect(() => {
-		sessionStorage.setItem('tunnelsTab', activeTab);
-	});
 
 	let awgAutoConnectivityNonce = $state(0);
 	let singboxAutoDelayCheckNonce = $state(0);
@@ -520,6 +503,8 @@
 			tabs={tunnelTabs}
 			active={activeTab}
 			onchange={(id) => (activeTab = id as TunnelTab)}
+			urlParam="tab"
+			defaultTab="awg"
 		/>
 
 		{#if activeTab === 'awg'}
