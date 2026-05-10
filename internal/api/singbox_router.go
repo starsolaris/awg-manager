@@ -116,6 +116,7 @@ type SingboxRouterOutboundDTO struct {
 	Tolerance     int      `json:"tolerance,omitempty" example:"50"`
 	Default       string   `json:"default,omitempty" example:"awg-vpn0"`
 	Strategy      string   `json:"strategy,omitempty" example:"prefer_ipv4"`
+	Source        string   `json:"source" example:"router" enums:"router,subscription"`
 }
 
 // SingboxRouterOutboundsListResponse is the envelope for GET /singbox/router/outbounds/list.

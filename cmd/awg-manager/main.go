@@ -908,14 +908,15 @@ func main() {
 	srv.SetMetricsPoller(ndmsMetricsPoller)
 
 	routerSvc := router.NewService(router.Deps{
-		Log:            log,
-		Settings:       settingsStore,
-		Singbox:        singboxOp,
-		Policies:       &routerAccessPolicyAdapter{svc: accessPolicySvc, wan: wanModel},
-		Events:         eventBus,
-		AWGTags:        &routerAWGTagAdapter{src: awgoutboundsSvc},
-		SingboxTunnels: &routerSingboxTunnelAdapter{src: singboxOp},
-		Orch:           sbOrch,
+		Log:                    log,
+		Settings:               settingsStore,
+		Singbox:                singboxOp,
+		Policies:               &routerAccessPolicyAdapter{svc: accessPolicySvc, wan: wanModel},
+		Events:                 eventBus,
+		AWGTags:                &routerAWGTagAdapter{src: awgoutboundsSvc},
+		SingboxTunnels:         &routerSingboxTunnelAdapter{src: singboxOp},
+		SubscriptionComposites: router.NewSubscriptionCompositesAdapter(subAdapter),
+		Orch:                   sbOrch,
 	})
 	tunnelService.SetAWGSyncer(awgoutboundsSvc)
 	tunnelService.SetDeviceProxyRefChecker(deviceProxySvc)
