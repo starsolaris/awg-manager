@@ -7,12 +7,10 @@
 	import { StatRow, Badge } from '$lib/components/ui';
 	import type { StatTile } from '$lib/components/ui';
 	import type { AWGTagInfo, SingboxTunnel } from '$lib/types';
-	import {
-		buildOutboundOptions,
-		CompositeOutboundsList,
-	} from '$lib/components/routing/singboxRouter';
+	import { CompositeOutboundsList } from '$lib/components/routing/singboxRouter';
 
 	const outboundsStore = singboxRouter.outbounds;
+	const optionsStore = singboxRouter.options;
 	const phase1Store = singboxTunnels;
 
 	const outbounds = $derived($outboundsStore);
@@ -45,9 +43,7 @@
 		unsubProxies?.();
 	});
 
-	const outboundOptions = $derived(
-		buildOutboundOptions(awgTags, phase1Tunnels, outbounds, true),
-	);
+	const outboundOptions = $derived($optionsStore);
 
 	const awgManagedCount = $derived(
 		awgTags.filter((t) => t.kind === 'managed').length,

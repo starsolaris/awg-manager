@@ -1,9 +1,7 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { api } from '$lib/api/client';
 	import { notifications } from '$lib/stores/notifications';
 	import { singboxRouter } from '$lib/stores/singboxRouter';
-	import { singboxTunnels } from '$lib/stores/singbox';
 	import {
 		Button,
 		IconButton,
@@ -14,14 +12,11 @@
 	} from '$lib/components/ui';
 	import type { DropdownOption, StatTile } from '$lib/components/ui';
 	import type {
-		AWGTagInfo,
 		SingboxRouterDNSRule,
 		SingboxRouterDNSServer,
 		SingboxRouterDNSStrategy,
-		SingboxTunnel,
 	} from '$lib/types';
 	import {
-		buildOutboundOptions,
 		DNSServerEditModal,
 		DNSRuleEditModal,
 	} from '$lib/components/routing/singboxRouter';
@@ -29,36 +24,16 @@
 	const dnsServersStore = singboxRouter.dnsServers;
 	const dnsRulesStore = singboxRouter.dnsRules;
 	const dnsGlobalsStore = singboxRouter.dnsGlobals;
-	const outboundsStore = singboxRouter.outbounds;
-	const phase1Store = singboxTunnels;
+	const optionsStore = singboxRouter.options;
 
 	const servers = $derived($dnsServersStore);
 	const rules = $derived($dnsRulesStore);
 	const globals = $derived($dnsGlobalsStore);
-	const outbounds = $derived($outboundsStore);
-	const phase1Tunnels = $derived(($phase1Store.data ?? []) as SingboxTunnel[]);
-
-	let awgTags = $state<AWGTagInfo[]>([]);
-
-	async function loadAWGTags(): Promise<void> {
-		try {
-			awgTags = await api.getAWGTags();
-		} catch {
-			awgTags = [];
-		}
-	}
+	const outboundOptions = $derived($optionsStore);
 
 	async function refresh(): Promise<void> {
 		await singboxRouter.loadAll();
 	}
-
-	onMount(() => {
-		loadAWGTags();
-	});
-
-	const outboundOptions = $derived(
-		buildOutboundOptions(awgTags, phase1Tunnels, outbounds, true),
-	);
 
 	// ── Globals (final + strategy) ────────────────────────────────
 	const STRATEGY_OPTIONS: DropdownOption<SingboxRouterDNSStrategy>[] = [

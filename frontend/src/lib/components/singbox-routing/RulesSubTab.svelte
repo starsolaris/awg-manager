@@ -1,11 +1,10 @@
 <script lang="ts">
-	import { onMount, untrack } from 'svelte';
+	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { api } from '$lib/api/client';
 	import { notifications } from '$lib/stores/notifications';
 	import { singboxRouter } from '$lib/stores/singboxRouter';
-	import { singboxTunnels } from '$lib/stores/singbox';
 	import {
 		Button,
 		IconButton,
@@ -14,41 +13,22 @@
 		ConfirmModal,
 	} from '$lib/components/ui';
 	import type { StatTile } from '$lib/components/ui';
-	import type { AWGTagInfo, SingboxRouterRule, SingboxRouterRuleSet, SingboxTunnel } from '$lib/types';
-	import {
-		buildOutboundOptions,
-		RuleEditModal,
-	} from '$lib/components/routing/singboxRouter';
+	import type { SingboxRouterRule, SingboxRouterRuleSet } from '$lib/types';
+	import { RuleEditModal } from '$lib/components/routing/singboxRouter';
 
 	const statusStore = singboxRouter.status;
 	const rulesStore = singboxRouter.rules;
 	const ruleSetsStore = singboxRouter.ruleSets;
-	const outboundsStore = singboxRouter.outbounds;
-	const phase1Store = singboxTunnels;
+	const optionsStore = singboxRouter.options;
 
 	const status = $derived($statusStore);
 	const rules = $derived($rulesStore);
 	const ruleSets = $derived<SingboxRouterRuleSet[]>($ruleSetsStore);
-	const outbounds = $derived($outboundsStore);
-	const phase1Tunnels = $derived(($phase1Store.data ?? []) as SingboxTunnel[]);
-
-	let awgTags = $state<AWGTagInfo[]>([]);
-
-	async function loadAWGTags(): Promise<void> {
-		try {
-			awgTags = await api.getAWGTags();
-		} catch {
-			awgTags = [];
-		}
-	}
+	const outboundOptions = $derived($optionsStore);
 
 	async function refresh(): Promise<void> {
 		await singboxRouter.loadAll();
 	}
-
-	onMount(() => {
-		loadAWGTags();
-	});
 
 	// Deep-link: ?newRuleSet=<tag> opens add-modal with that tag preselected.
 	// Triggered by the "+ Правило" button on RuleSetsSubTab cards via
@@ -65,10 +45,6 @@
 		const url = $page.url.pathname + (sp.toString() ? '?' + sp : '') + $page.url.hash;
 		void goto(url, { replaceState: true, keepFocus: true, noScroll: true });
 	});
-
-	const outboundOptions = $derived(
-		buildOutboundOptions(awgTags, phase1Tunnels, outbounds, true),
-	);
 
 	const finalLabel = $derived(status?.final || 'direct');
 

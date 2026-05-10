@@ -1,11 +1,9 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { api } from '$lib/api/client';
 	import { notifications } from '$lib/stores/notifications';
 	import { singboxRouter } from '$lib/stores/singboxRouter';
-	import { singboxTunnels } from '$lib/stores/singbox';
 	import {
 		Button,
 		IconButton,
@@ -14,48 +12,23 @@
 		ConfirmModal,
 	} from '$lib/components/ui';
 	import type { StatTile } from '$lib/components/ui';
-	import type {
-		AWGTagInfo,
-		SingboxRouterRuleSet,
-		SingboxTunnel,
-	} from '$lib/types';
+	import type { SingboxRouterRuleSet } from '$lib/types';
 	import {
-		buildOutboundOptions,
 		RuleSetAddModal,
 		RefreshSettingsModal,
 	} from '$lib/components/routing/singboxRouter';
 
 	const ruleSetsStore = singboxRouter.ruleSets;
-	const outboundsStore = singboxRouter.outbounds;
+	const optionsStore = singboxRouter.options;
 	const settingsStore = singboxRouter.settings;
-	const phase1Store = singboxTunnels;
 
 	const ruleSets = $derived($ruleSetsStore);
-	const outbounds = $derived($outboundsStore);
+	const outboundOptions = $derived($optionsStore);
 	const settings = $derived($settingsStore);
-	const phase1Tunnels = $derived(($phase1Store.data ?? []) as SingboxTunnel[]);
-
-	let awgTags = $state<AWGTagInfo[]>([]);
-
-	async function loadAWGTags(): Promise<void> {
-		try {
-			awgTags = await api.getAWGTags();
-		} catch {
-			awgTags = [];
-		}
-	}
 
 	async function refresh(): Promise<void> {
 		await singboxRouter.loadAll();
 	}
-
-	onMount(() => {
-		loadAWGTags();
-	});
-
-	const outboundOptions = $derived(
-		buildOutboundOptions(awgTags, phase1Tunnels, outbounds, true),
-	);
 
 	type SourceFilter = 'all' | 'remote' | 'local' | 'inline';
 	let sourceFilter = $state<SourceFilter>('all');
