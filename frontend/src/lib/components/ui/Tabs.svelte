@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { untrack } from 'svelte';
     import { goto } from '$app/navigation';
     import { page } from '$app/stores';
 
@@ -64,12 +65,16 @@
 
     // Inbound sync: URL → onchange. Triggers on mount, browser back/forward,
     // and any external goto() touching this query param. Silently ignores
-    // values that don't match a known tab id.
+    // values that don't match a known tab id. `active` is read via untrack
+    // so this effect does NOT re-fire when the parent updates active —
+    // otherwise on a click the inbound effect would race the outbound one
+    // (declaration order: inbound first), see stale URL, and override the
+    // user's selection by calling onchange with the previous tab.
     $effect(() => {
         if (!urlParam) return;
         const fromUrl = $page.url.searchParams.get(urlParam);
         if (fromUrl == null) return;
-        if (fromUrl === active) return;
+        if (fromUrl === untrack(() => active)) return;
         if (!tabs.find((t) => t.id === fromUrl)) return;
         onchange(fromUrl);
     });
