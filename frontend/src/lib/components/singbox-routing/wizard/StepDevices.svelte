@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { api } from '$lib/api/client';
 	import type { PolicyDevice } from '$lib/types';
 	import { singboxWizard } from '$lib/stores/singboxWizard';
@@ -8,6 +8,19 @@
 
 	let allDevices = $state<PolicyDevice[]>([]);
 	let loading = $state(true);
+	let snapshotTaken = $state(false);
+
+	const policyName = $derived($wizardState.resolvedPolicyName);
+	const policyMode = $derived($wizardState.policyMode);
+	const selectedMacs = $derived($wizardState.deviceMacs);
+
+	// Eligible: unassigned (policy='') OR already in our resolved policy.
+	// Devices in OTHER policies are hidden — wizard does not reassign cross-policy in v1.
+	const visible = $derived(
+		policyName
+			? allDevices.filter((d) => d.policy === '' || d.policy === policyName)
+			: allDevices.filter((d) => d.policy === ''),
+	);
 
 	onMount(async () => {
 		try {
@@ -18,118 +31,121 @@
 		loading = false;
 	});
 
-	const policyName = $derived($wizardState.policyName);
-	const eligible = $derived(
-		allDevices.filter((d) => d.policy === '' || d.policy === policyName),
-	);
-	const hidden = $derived(allDevices.length - eligible.length);
-	const selectedMacs = $derived($wizardState.deviceMacs);
-	const allSelected = $derived(
-		eligible.length > 0 && eligible.every((d) => selectedMacs.includes(d.mac)),
-	);
-
-	function toggleAll(): void {
-		if (allSelected) {
-			singboxWizard.setDeviceMacs([]);
-		} else {
-			singboxWizard.setDeviceMacs(eligible.map((d) => d.mac));
-		}
-	}
-
-	function toggleDevice(mac: string): void {
-		const next = selectedMacs.includes(mac)
-			? selectedMacs.filter((m) => m !== mac)
-			: [...selectedMacs, mac];
-		singboxWizard.setDeviceMacs(next);
-	}
-
+	// Once data loaded AND resolved policy known: snapshot current membership;
+	// pre-check those devices for 'existing' mode, leave empty for 'create' (UX 2).
+	// Snapshot taken once via flag — re-runs guarded.
 	$effect(() => {
-		if (!loading && eligible.length > 0 && selectedMacs.length === 0) {
-			singboxWizard.setDeviceMacs(eligible.map((d) => d.mac));
+		if (loading) return;
+		if (snapshotTaken) return;
+		if (policyMode === 'existing' && !policyName) return;
+		snapshotTaken = true;
+		const initial = policyName
+			? allDevices.filter((d) => d.policy === policyName).map((d) => d.mac)
+			: [];
+		singboxWizard.setInitialDeviceMacs(initial);
+		if (policyMode === 'existing') {
+			singboxWizard.setDeviceMacs(initial);
+		} else {
+			singboxWizard.setDeviceMacs([]);
 		}
 	});
+
+	function toggle(mac: string): void {
+		const cur = untrack(() => $wizardState.deviceMacs);
+		const next = cur.includes(mac) ? cur.filter((m) => m !== mac) : [...cur, mac];
+		singboxWizard.setDeviceMacs(next);
+	}
+	function selectAll(): void {
+		singboxWizard.setDeviceMacs(visible.map((d) => d.mac));
+	}
+	function selectNone(): void {
+		singboxWizard.setDeviceMacs([]);
+	}
+	function isInPolicy(d: PolicyDevice): boolean {
+		return policyName !== null && d.policy === policyName;
+	}
 </script>
 
 <div class="title">Какие устройства пустить через мастер?</div>
-<div class="subtitle">
-	Создаётся access policy <b>{policyName}</b>. Показаны только устройства, не привязанные к другой policy.
+<div class="hint">
+	Создаётся access policy <b>{policyName ?? '...'}</b>. Показаны только устройства,
+	не привязанные к другой policy.
 </div>
 
 {#if loading}
-	<div class="hint">Загрузка устройств...</div>
-{:else if eligible.length === 0}
-	<div class="empty">
-		Все устройства уже привязаны к другим policy. Откройте управление policy и освободите хотя бы одно устройство, либо назначьте им {policyName} вручную.
-		<a class="link" href="/routing?tab=policy">Открыть policy management</a>
-	</div>
+	<div class="muted">Загрузка устройств...</div>
+{:else if visible.length === 0}
+	<div class="muted">Нет доступных устройств. Освободите устройства из других policies в /routing → Политики доступа.</div>
 {:else}
-	<div class="list">
-		<button type="button" class="row toggle-all" onclick={toggleAll}>
-			<span class="cb" class:checked={allSelected}></span>
-			<div class="name">Все устройства</div>
-			<div class="meta mono">{eligible.length}</div>
-		</button>
-		{#each eligible as d (d.mac)}
-			<button type="button" class="row" onclick={() => toggleDevice(d.mac)}>
-				<span class="cb" class:checked={selectedMacs.includes(d.mac)}></span>
-				<div class="name">{d.name || d.hostname || d.mac}</div>
-				<div class="meta mono">{d.ip} {d.mac}</div>
-			</button>
+	<div class="bulk">
+		<button type="button" class="link" onclick={selectAll}>Выбрать все</button>
+		<button type="button" class="link" onclick={selectNone}>Снять все</button>
+		<span class="counter">{selectedMacs.length} / {visible.length}</span>
+	</div>
+	<div class="device-list">
+		{#each visible as d (d.mac)}
+			{@const checked = selectedMacs.includes(d.mac)}
+			{@const inPolicy = isInPolicy(d)}
+			<label class="device" class:checked>
+				<input type="checkbox" {checked} onchange={() => toggle(d.mac)} />
+				<span class="device-name">{d.name || d.hostname || d.mac}</span>
+				{#if inPolicy}
+					<span class="badge-managed" title="Уже в этой policy">в policy</span>
+				{/if}
+				<span class="device-meta">{d.ip}</span>
+				<span class="device-meta">{d.mac}</span>
+			</label>
 		{/each}
 	</div>
-	{#if hidden > 0}
-		<div class="hint">{hidden} устройств уже привязаны к другим policy и в список не попали.</div>
-	{/if}
 {/if}
 
 <style>
-	.title { font-size: 1.05rem; color: var(--color-text-primary); font-weight: 600; margin-bottom: 0.3rem; }
-	.subtitle { color: var(--color-text-muted); font-size: 0.85rem; margin-bottom: 1rem; }
-	.hint { color: var(--color-text-muted); font-size: 0.78rem; margin-top: 0.6rem; }
-	.empty {
-		padding: 1.2rem;
-		border: 1px dashed var(--color-border);
-		border-radius: 6px;
-		color: var(--color-text-muted);
-		font-size: 0.85rem;
-		text-align: center;
+	.title { font-size: 1.05rem; color: var(--color-text-primary); font-weight: 600; margin-bottom: 0.6rem; }
+	.hint { color: var(--color-text-muted); font-size: 0.85rem; margin-bottom: 1rem; }
+	.muted { color: var(--color-text-muted); font-size: 0.85rem; }
+	.bulk {
+		display: flex;
+		gap: 0.75rem;
+		align-items: center;
+		margin-bottom: 0.5rem;
+		font-size: 0.82rem;
 	}
 	.link {
-		display: inline-block;
-		margin-top: 0.6rem;
+		background: none;
+		border: none;
 		color: var(--color-accent);
+		cursor: pointer;
+		padding: 0;
+		font: inherit;
 	}
-	.list {
-		background: var(--color-bg-secondary);
-		border: 1px solid var(--color-border);
-		border-radius: 6px;
-		overflow: hidden;
+	.counter {
+		margin-left: auto;
+		color: var(--color-text-muted);
 	}
-	.row {
+	.device-list { display: flex; flex-direction: column; gap: 0.3rem; }
+	.device {
 		display: flex;
 		align-items: center;
-		gap: 0.7rem;
-		padding: 0.55rem 0.75rem;
-		border: 0;
-		border-bottom: 1px solid var(--color-border);
-		background: transparent;
-		width: 100%;
-		font: inherit;
-		text-align: left;
-		color: var(--color-text-primary);
-		cursor: pointer;
-	}
-	.row:last-child { border-bottom: 0; }
-	.row.toggle-all { background: var(--color-bg-primary); font-weight: 600; }
-	.cb {
-		width: 14px; height: 14px;
+		gap: 0.6rem;
+		padding: 0.45rem 0.7rem;
+		background: var(--color-bg-secondary);
 		border: 1px solid var(--color-border);
-		border-radius: 3px;
-		background: var(--color-bg-primary);
-		flex-shrink: 0;
+		border-radius: 4px;
+		cursor: pointer;
+		font-size: 0.85rem;
 	}
-	.cb.checked { background: var(--color-accent); border-color: var(--color-accent); }
-	.name { flex: 1; }
-	.meta { font-size: 0.75rem; color: var(--color-text-muted); }
-	.mono { font-family: var(--font-mono, ui-monospace, monospace); }
+	.device.checked { border-color: var(--color-accent); }
+	.device-name { color: var(--color-text-primary); flex: 0 0 auto; }
+	.device-meta {
+		color: var(--color-text-muted);
+		font-family: var(--font-mono, ui-monospace, monospace);
+		font-size: 0.75rem;
+	}
+	.badge-managed {
+		background: rgba(120, 130, 200, 0.18);
+		color: var(--color-text-muted);
+		font-size: 0.65rem;
+		padding: 0.1rem 0.4rem;
+		border-radius: 999px;
+	}
 </style>
