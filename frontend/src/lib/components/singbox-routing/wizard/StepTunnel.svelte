@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { api } from '$lib/api/client';
-	import type { AWGTagInfo } from '$lib/types';
+	import { goto } from '$app/navigation';
 	import { singboxWizard } from '$lib/stores/singboxWizard';
 	import { singboxRouter } from '$lib/stores/singboxRouter';
+	import { Button } from '$lib/components/ui';
 
 	interface Props {
 		onAdvance: () => void;
@@ -25,13 +25,6 @@
 	);
 
 	const selected = $derived($wizardState.tunnelTag);
-
-	// Empty-state import flow — still uses api.getAWGTags() to detect the
-	// post-import tunnel and advance automatically.
-	let importContent = $state('');
-	let importName = $state('');
-	let importing = $state(false);
-	let importError = $state('');
 
 	// Auto-pick when exactly 1 outbound exists across all groups.
 	// Gated on $optionsReady to avoid firing during cold-load (when only
@@ -63,30 +56,6 @@
 		return label;
 	}
 
-	async function importTunnel(): Promise<void> {
-		const content = importContent.trim();
-		if (!content) {
-			importError = 'Вставьте wg-quick конфиг';
-			return;
-		}
-		importing = true;
-		importError = '';
-		try {
-			const tunnel = await api.importConfig(content, importName || undefined, 'kernel');
-			const tags = await api.getAWGTags();
-			const newTag = tags.find((t: AWGTagInfo) => t.tag === tunnel.id || t.tag.includes(tunnel.id))?.tag;
-			if (newTag) {
-				singboxWizard.setTunnelTag(newTag);
-				onAdvance();
-			} else {
-				importError = 'Туннель импортирован, но не найден в списке. Откройте /tunnels.';
-			}
-		} catch (e) {
-			importError = e instanceof Error ? e.message : 'Ошибка импорта';
-		} finally {
-			importing = false;
-		}
-	}
 </script>
 
 <div class="title">Через какой туннель пускать трафик?</div>
@@ -130,25 +99,12 @@
 		{/each}
 	</div>
 {:else}
-	<div class="hint">Туннелей пока нет. Вставьте wg-quick конфиг — мастер импортирует и продолжит.</div>
-	<input
-		class="input"
-		placeholder="Имя туннеля (опционально)"
-		bind:value={importName}
-		disabled={importing}
-	/>
-	<textarea
-		class="paste"
-		bind:value={importContent}
-		placeholder={'[Interface]\nPrivateKey = ...\nAddress = 10.0.0.2/24\nDNS = 1.1.1.1\n\n[Peer]\nPublicKey = ...\nEndpoint = 1.2.3.4:51820\nAllowedIPs = 0.0.0.0/0'}
-		disabled={importing}
-	></textarea>
-	{#if importError}
-		<div class="err">{importError}</div>
-	{/if}
-	<button class="primary" type="button" onclick={importTunnel} disabled={importing}>
-		{importing ? 'Импортируем...' : 'Импортировать и продолжить'}
-	</button>
+	<div class="hint">Туннелей нет. Создайте AWG туннель в разделе Туннели и вернитесь.</div>
+	<div style="margin-top: 0.75rem;">
+		<Button variant="secondary" onclick={() => { singboxWizard.close(); goto('/tunnels/new'); }}>
+			Перейти к созданию туннеля
+		</Button>
+	</div>
 {/if}
 
 <style>
@@ -228,45 +184,6 @@
 		flex-shrink: 0;
 		color: var(--color-accent);
 	}
-
-	.input {
-		display: block;
-		width: 100%;
-		padding: 0.5rem 0.7rem;
-		margin-bottom: 0.5rem;
-		background: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
-		border-radius: 4px;
-		color: var(--color-text-primary);
-	}
-	.paste {
-		width: 100%;
-		min-height: 160px;
-		font-family: var(--font-mono, ui-monospace, monospace);
-		font-size: 0.78rem;
-		padding: 0.7rem;
-		background: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
-		border-radius: 4px;
-		color: var(--color-text-primary);
-		resize: vertical;
-	}
-	.err {
-		color: #f85149;
-		font-size: 0.85rem;
-		margin-top: 0.4rem;
-	}
-	.primary {
-		margin-top: 0.7rem;
-		padding: 0.5rem 1rem;
-		background: #238636;
-		color: white;
-		border: 1px solid #2ea043;
-		border-radius: 6px;
-		font: inherit;
-		cursor: pointer;
-	}
-	.primary:disabled { opacity: 0.6; cursor: wait; }
 
 	.groups {
 		display: flex;
