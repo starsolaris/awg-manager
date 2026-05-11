@@ -1438,7 +1438,11 @@ export interface WizardState {
 	presetIds: string[];
 	tunnelTag: string | null;
 	deviceMacs: string[];
+	policyMode: 'create' | 'existing';
 	policyName: string;
+	existingPolicyName: string | null;
+	resolvedPolicyName: string | null;
+	initialDeviceMacs: string[];
 	dnsServer: string | null;
 	applyLog: ApplyLogEntry[];
 	error: { phase: string; message: string } | null;

@@ -10,7 +10,11 @@ const initialState = (): WizardState => ({
 	presetIds: [],
 	tunnelTag: null,
 	deviceMacs: [],
+	policyMode: 'create',
 	policyName: 'SBRouter',
+	existingPolicyName: null,
+	resolvedPolicyName: null,
+	initialDeviceMacs: [],
 	dnsServer: null,
 	applyLog: [],
 	error: null,
@@ -58,6 +62,30 @@ function createSingboxWizardStore() {
 		state.update((s) => ({ ...s, deviceMacs: macs }));
 	}
 
+	function setPolicyMode(mode: 'create' | 'existing'): void {
+		state.update((s) => ({ ...s, policyMode: mode }));
+	}
+
+	function setPolicyName(name: string): void {
+		state.update((s) => ({ ...s, policyName: name }));
+	}
+
+	function setExistingPolicyName(name: string | null): void {
+		state.update((s) => ({ ...s, existingPolicyName: name }));
+	}
+
+	function setResolvedPolicyName(name: string | null): void {
+		state.update((s) => ({ ...s, resolvedPolicyName: name }));
+	}
+
+	function setInitialDeviceMacs(macs: string[]): void {
+		state.update((s) => ({ ...s, initialDeviceMacs: [...macs] }));
+	}
+
+	function clearLog(): void {
+		state.update((s) => ({ ...s, applyLog: [] }));
+	}
+
 	function setDnsServer(addr: string | null): void {
 		state.update((s) => ({ ...s, dnsServer: addr }));
 	}
@@ -94,9 +122,15 @@ function createSingboxWizardStore() {
 		togglePresetId,
 		setTunnelTag,
 		setDeviceMacs,
+		setPolicyMode,
+		setPolicyName,
+		setExistingPolicyName,
+		setResolvedPolicyName,
+		setInitialDeviceMacs,
 		setDnsServer,
 		pushLog,
 		updateLastLog,
+		clearLog,
 		setError,
 		clearError,
 	};
