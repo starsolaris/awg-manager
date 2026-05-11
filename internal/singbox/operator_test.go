@@ -756,3 +756,85 @@ func TestPatchTunnelsSlotStripBaseDNS_PreservesUserDNSRules(t *testing.T) {
 		t.Errorf("want 1 surviving rule, got %d", len(rules))
 	}
 }
+
+func TestEnsureBaseConfig_PatchesMissingDirectOutbound(t *testing.T) {
+	dir := t.TempDir()
+	configDir := filepath.Join(dir, "config.d")
+	_ = os.MkdirAll(configDir, 0755)
+	// Legacy 00-base.json with no outbounds key at all — the real-world
+	// shape that produced FATAL "default outbound not found: direct" on
+	// startup after router.NewEmptyConfig began emitting route.final=direct.
+	stale := `{"log":{"level":"trace","timestamp":true},"route":{"default_domain_resolver":"dns-bootstrap"}}`
+	basePath := filepath.Join(configDir, "00-base.json")
+	if err := os.WriteFile(basePath, []byte(stale), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ensureBaseConfig(configDir)
+	raw, _ := os.ReadFile(basePath)
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	obs, ok := m["outbounds"].([]any)
+	if !ok || len(obs) != 1 {
+		t.Fatalf("outbounds want 1 direct entry, got %#v", m["outbounds"])
+	}
+	d := obs[0].(map[string]any)
+	if d["tag"] != "direct" || d["type"] != "direct" {
+		t.Errorf("direct entry malformed: %#v", d)
+	}
+}
+
+func TestEnsureBaseConfig_PreservesExistingDirectOutbound(t *testing.T) {
+	dir := t.TempDir()
+	configDir := filepath.Join(dir, "config.d")
+	_ = os.MkdirAll(configDir, 0755)
+	// User customised direct (e.g. bind to a specific interface). Heal
+	// must NOT clobber — bail as soon as a tag=="direct" entry is seen.
+	custom := `{"log":{"level":"trace"},"outbounds":[{"type":"direct","tag":"direct","bind_interface":"eth0"}]}`
+	basePath := filepath.Join(configDir, "00-base.json")
+	if err := os.WriteFile(basePath, []byte(custom), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ensureBaseConfig(configDir)
+	raw, _ := os.ReadFile(basePath)
+	var m map[string]any
+	_ = json.Unmarshal(raw, &m)
+	obs := m["outbounds"].([]any)
+	if len(obs) != 1 {
+		t.Fatalf("want 1 outbound, got %d", len(obs))
+	}
+	d := obs[0].(map[string]any)
+	if d["bind_interface"] != "eth0" {
+		t.Errorf("user bind_interface clobbered: %#v", d)
+	}
+}
+
+func TestEnsureBaseConfig_AppendsDirectAlongsideOtherOutbounds(t *testing.T) {
+	dir := t.TempDir()
+	configDir := filepath.Join(dir, "config.d")
+	_ = os.MkdirAll(configDir, 0755)
+	// outbounds present but no direct — append, don't replace.
+	custom := `{"log":{"level":"trace"},"outbounds":[{"type":"selector","tag":"sub-x","outbounds":["sub-x-1"]}]}`
+	basePath := filepath.Join(configDir, "00-base.json")
+	if err := os.WriteFile(basePath, []byte(custom), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ensureBaseConfig(configDir)
+	raw, _ := os.ReadFile(basePath)
+	var m map[string]any
+	_ = json.Unmarshal(raw, &m)
+	obs := m["outbounds"].([]any)
+	if len(obs) != 2 {
+		t.Fatalf("want 2 outbounds (selector + direct), got %d: %s", len(obs), raw)
+	}
+	tags := map[string]bool{}
+	for _, v := range obs {
+		ob := v.(map[string]any)
+		tags[ob["tag"].(string)] = true
+	}
+	if !tags["sub-x"] || !tags["direct"] {
+		t.Errorf("missing required tags, got %v", tags)
+	}
+}
+

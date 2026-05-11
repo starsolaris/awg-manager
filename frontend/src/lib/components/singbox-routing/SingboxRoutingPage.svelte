@@ -17,6 +17,7 @@
 	import { WizardModal, WizardEntry } from './wizard';
 	import { singboxWizard } from '$lib/stores/singboxWizard';
 	import { singboxRouter } from '$lib/stores/singboxRouter';
+	import { stripAnsi } from '$lib/utils/ansi';
 
 	type SubTab =
 		| 'engine'
@@ -92,7 +93,7 @@
 	const singboxInstalled = $derived(status?.installed ?? false);
 	const running = $derived(status?.running ?? false);
 	const version = $derived(status?.version ?? status?.currentVersion ?? '—');
-	const singboxLastError = $derived(status?.lastError?.trim() ?? '');
+	const singboxLastError = $derived(stripAnsi(status?.lastError).trim());
 
 	const routerStatusStore = singboxRouter.status;
 	const routerStatus = $derived($routerStatusStore);

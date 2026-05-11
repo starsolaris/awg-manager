@@ -6,6 +6,7 @@
   import { openContextMenu } from './log-row-context-menu';
   import { formatTime } from '$lib/utils/format';
   import { familyOf } from './subgroup-palette';
+  import { stripAnsi } from '$lib/utils/ansi';
 
   interface Props {
     log: LogEntry;
@@ -31,6 +32,13 @@
 
   const subgroupFamily = $derived(familyOf(log.subgroup));
 
+  // Sing-box stderr lines (and any other ANSI-emitting source) may carry
+  // raw colour escapes. Strip at the render boundary — sing-box has no
+  // config-level switch to suppress colour, and its CLI --disable-color
+  // is reportedly buggy (issue #423), so the backend keeps raw bytes and
+  // the frontend decorates for display.
+  const cleanMessage = $derived(stripAnsi(log.message));
+
   const levelLabel: Record<string, string> = {
     error: 'ERROR',
     warn: 'WARN',
@@ -40,7 +48,7 @@
   };
 
   const formattedLine = $derived(
-    `[${formatTime(log.timestamp)}] [${(levelLabel[log.level] ?? log.level).toUpperCase()}] [${log.group}${log.subgroup ? '/' + log.subgroup : ''}] ${log.action} ${log.target}: ${log.message}`,
+    `[${formatTime(log.timestamp)}] [${(levelLabel[log.level] ?? log.level).toUpperCase()}] [${log.group}${log.subgroup ? '/' + log.subgroup : ''}] ${log.action} ${log.target}: ${cleanMessage}`,
   );
 
   function handleClickScope(e: MouseEvent) {
@@ -56,7 +64,7 @@
   function handleContextMenu(e: MouseEvent) {
     openContextMenu(e, log, {
       onCopyLine: () => onCopyLine?.(formattedLine),
-      onCopyMessage: () => onCopyMessage?.(log.message),
+      onCopyMessage: () => onCopyMessage?.(cleanMessage),
       onFilterScope: () => onClickScope?.(log.group, log.subgroup),
       onFilterLevel: () => onClickLevel?.(log.level),
     });
@@ -112,7 +120,7 @@
   <span class="action">{log.action}</span>
   <span class="target">{log.target}</span>
   <span class="arrow">→</span>
-  <span class="message" class:truncate={!isExpanded}>{log.message}</span>
+  <span class="message" class:truncate={!isExpanded}>{cleanMessage}</span>
 </div>
 
 <style>

@@ -328,6 +328,7 @@ func ensureBaseConfig(configDir string) {
 		patchBaseClashPort(basePath)
 		patchBaseLogLevel(basePath)
 		patchBaseDomainResolver(basePath)
+		patchBaseDirectOutbound(basePath)
 		patchBaseCacheFilePath(basePath)
 		return
 	}
@@ -603,6 +604,40 @@ func patchBaseDomainResolver(basePath string) {
 		return
 	}
 	route["default_domain_resolver"] = "dns-bootstrap"
+	_ = writeJSONFile(basePath, m)
+}
+
+// patchBaseDirectOutbound self-heals legacy 00-base.json files that
+// pre-date the canonical {type:"direct", tag:"direct"} outbound. With
+// router.NewEmptyConfig now defaulting route.final to "direct"
+// (commit 56bbab35), every merged config references that tag — but
+// older base files written before freshBaseConfig included the entry
+// never had it, so sing-box FATALs on start with
+// "default outbound not found: direct". Adds the entry when missing;
+// preserves any pre-existing outbounds (including a user-customised
+// direct, e.g. one with bind_interface). No-op when outbounds is
+// missing entirely AND the merged config never references "direct" —
+// but cheaper to always inject than to second-guess the merge.
+func patchBaseDirectOutbound(basePath string) {
+	data, err := os.ReadFile(basePath)
+	if err != nil {
+		return
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		return
+	}
+	obs, _ := m["outbounds"].([]any)
+	for _, v := range obs {
+		ob, ok := v.(map[string]any)
+		if !ok {
+			continue
+		}
+		if tag, _ := ob["tag"].(string); tag == "direct" {
+			return
+		}
+	}
+	m["outbounds"] = append(obs, map[string]any{"type": "direct", "tag": "direct"})
 	_ = writeJSONFile(basePath, m)
 }
 
