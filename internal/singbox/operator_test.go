@@ -2,14 +2,19 @@ package singbox
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/hoaxisr/awg-manager/internal/logging"
 )
+
+// Sentinel error used by preflight tests to assert validator delegation.
+var errSyntheticValidator = errors.New("synthetic validator")
 
 func TestParseSingboxVersionOutput(t *testing.T) {
 	t.Run("typical 1.13.x output", func(t *testing.T) {
@@ -954,6 +959,76 @@ func TestStripStrayDirectPlaceholder_SkipsSubdirectories(t *testing.T) {
 	raw, _ := os.ReadFile(filepath.Join(sub, "98-old.json"))
 	if string(raw) != staleInDisabled {
 		t.Errorf("disabled/ subdir must be untouched, got: %s", raw)
+	}
+}
+
+// preflightConfigDir runs our local configmerge first so duplicate
+// tags surface with both conflicting slot file names — actionable
+// where `sing-box check` alone reports only the tag.
+func TestPreflightConfigDir_SurfacesCollisionWithBothFilenames(t *testing.T) {
+	configDir := t.TempDir()
+	base := `{"outbounds":[{"type":"direct","tag":"direct"}]}`
+	dup := `{"outbounds":[{"type":"direct","tag":"direct"}]}`
+	if err := os.WriteFile(filepath.Join(configDir, "00-base.json"), []byte(base), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(configDir, "10-tunnels.json"), []byte(dup), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Validator that would falsely pass — proves preflight stops at
+	// configmerge before delegating, so the diagnostic stays ours.
+	op := &Operator{
+		configPath: configDir,
+		validator: &Validator{
+			binary: "/nonexistent",
+			exec:   func(string, ...string) ([]byte, error) { return nil, nil },
+		},
+	}
+
+	err := op.preflightConfigDir()
+	if err == nil {
+		t.Fatal("preflightConfigDir: want error, got nil")
+	}
+	msg := err.Error()
+	for _, want := range []string{`outbounds`, `"direct"`, `00-base.json`, `10-tunnels.json`} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("preflight error missing %q: %s", want, msg)
+		}
+	}
+}
+
+// On a clean tree, preflight falls through to sing-box check — the
+// failure path we use to prove the second stage actually runs.
+func TestPreflightConfigDir_FallsThroughToValidator(t *testing.T) {
+	configDir := t.TempDir()
+	// One slot, one direct outbound — no collisions.
+	if err := os.WriteFile(filepath.Join(configDir, "00-base.json"),
+		[]byte(`{"outbounds":[{"type":"direct","tag":"direct"}]}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	validatorCalls := 0
+	op := &Operator{
+		configPath: configDir,
+		validator: &Validator{
+			binary: "/nonexistent",
+			exec: func(string, ...string) ([]byte, error) {
+				validatorCalls++
+				return []byte("synthetic schema failure"), errSyntheticValidator
+			},
+		},
+	}
+
+	err := op.preflightConfigDir()
+	if err == nil {
+		t.Fatal("want validator error to surface, got nil")
+	}
+	if validatorCalls != 1 {
+		t.Errorf("validator must be called exactly once after configmerge success, got %d", validatorCalls)
+	}
+	if !strings.Contains(err.Error(), "synthetic schema failure") {
+		t.Errorf("validator error must propagate verbatim, got: %s", err)
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 	"github.com/hoaxisr/awg-manager/internal/logging"
 	"github.com/hoaxisr/awg-manager/internal/ndms/command"
 	"github.com/hoaxisr/awg-manager/internal/ndms/query"
+	"github.com/hoaxisr/awg-manager/internal/singbox/configmerge"
 	"github.com/hoaxisr/awg-manager/internal/singbox/installer"
 	"github.com/hoaxisr/awg-manager/internal/singbox/orchestrator"
 	"github.com/hoaxisr/awg-manager/internal/singbox/vlink"
@@ -881,6 +882,29 @@ func (o *Operator) ValidateConfigDir(ctx context.Context) error {
 	return o.validator.Validate(o.configPath)
 }
 
+// preflightConfigDir validates config.d/ before any action that would
+// have sing-box parse it (cold start, post-write reload, etc.).
+//
+// Runs our local configmerge first: when two slot files contribute
+// conflicting tags inside the same merged array, MergeDir returns a
+// *configmerge.CollisionError naming BOTH offending files —
+//
+//	"tag collision: outbounds \"direct\" appears in both
+//	 00-base.json and 10-tunnels.json"
+//
+// sing-box itself only reports the tag ("duplicate outbound/endpoint
+// tag: direct"), so surfacing our message into LastError gives users
+// an actionable diagnostic without needing SSH access to grep through
+// config.d/. Falls through to `sing-box check` for everything our
+// merge doesn't cover (parse errors, schema violations, unknown
+// option keys, etc.).
+func (o *Operator) preflightConfigDir() error {
+	if _, err := configmerge.MergeDir(o.configPath); err != nil {
+		return err
+	}
+	return o.validator.Validate(o.configPath)
+}
+
 // IsRunning reports whether the sing-box process is alive (and its PID).
 // Public version of o.proc.IsRunning for cross-package callers.
 func (o *Operator) IsRunning() (bool, int) { return o.proc.IsRunning() }
@@ -897,7 +921,7 @@ func (o *Operator) Reload() error { return o.proc.Reload() }
 // version of the internal startAndWait — used by router.Service.Enable
 // when sing-box wasn't already running.
 func (o *Operator) Start() error {
-	if err := o.validator.Validate(o.configPath); err != nil {
+	if err := o.preflightConfigDir(); err != nil {
 		return err
 	}
 	return o.proc.Start()
@@ -1496,7 +1520,7 @@ func (o *Operator) applyConfig(ctx context.Context, cfg *Config) error {
 		restore()
 		return err
 	}
-	if err := o.validator.Validate(o.configPath); err != nil {
+	if err := o.preflightConfigDir(); err != nil {
 		restore()
 		return fmt.Errorf("validate: %w", err)
 	}
