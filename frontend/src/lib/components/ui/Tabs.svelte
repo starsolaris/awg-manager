@@ -313,7 +313,7 @@
 
     .tab.active .tab-badge {
         background: var(--accent);
-        color: #fff;
+        color: var(--color-accent-contrast, #fff);
     }
 
     .tab-badge.success {
@@ -332,10 +332,13 @@
     /* Active-tab overrides keep contrast on the selected tab. */
     .tab.active .tab-badge.success,
     .tab.active .tab-badge.warning {
-        color: #fff;
+        color: var(--color-success-contrast, #fff);
     }
     .tab.active .tab-badge.success { background: var(--success); }
-    .tab.active .tab-badge.warning { background: var(--warning); }
+    .tab.active .tab-badge.warning {
+        background: var(--warning);
+        color: var(--color-warning-contrast, #fff);
+    }
 
     /* ─── More chip ─── */
     .more-wrap {

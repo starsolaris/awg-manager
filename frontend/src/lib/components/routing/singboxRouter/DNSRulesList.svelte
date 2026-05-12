@@ -219,10 +219,16 @@
 		font-size: 0.7rem;
 		font-weight: 600;
 		text-align: center;
-		color: white;
+		color: var(--color-accent-contrast, #ffffff);
 	}
-	.badge-route { background: var(--accent, #3b82f6); }
-	.badge-reject { background: var(--danger, #dc2626); }
+	.badge-route {
+		background: var(--accent, #3b82f6);
+		color: var(--color-accent-contrast, #ffffff);
+	}
+	.badge-reject {
+		background: var(--danger, #dc2626);
+		color: var(--color-error-contrast, #ffffff);
+	}
 	.matcher {
 		color: var(--text);
 		overflow: hidden;

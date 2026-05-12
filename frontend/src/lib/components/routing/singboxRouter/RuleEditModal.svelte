@@ -283,7 +283,7 @@
 	}
 	.segment button.active {
 		background: var(--accent, #3b82f6);
-		color: white;
+		color: var(--color-accent-contrast, #ffffff);
 		font-weight: 600;
 	}
 	.error {

@@ -121,7 +121,7 @@
 
   .variant-primary {
     background: var(--color-accent);
-    color: white;
+    color: var(--color-accent-contrast, #ffffff);
   }
   .variant-primary:hover:not(:disabled):not(.is-disabled) {
     background: var(--color-accent-hover);
@@ -148,7 +148,7 @@
 
   .variant-danger {
     background: var(--color-error);
-    color: white;
+    color: var(--color-error-contrast, #ffffff);
   }
   .variant-danger:hover:not(:disabled):not(.is-disabled) {
     filter: brightness(1.1);
@@ -156,7 +156,7 @@
 
   .variant-success {
     background: var(--color-success);
-    color: white;
+    color: var(--color-success-contrast, #ffffff);
   }
   .variant-success:hover:not(:disabled):not(.is-disabled) {
     filter: brightness(1.1);

@@ -11,6 +11,7 @@
 		UpdateSection,
 		DnsRouteSettings,
 		IntegrationsCard,
+		ThemeSchemeCard,
 		SettingsFooter,
 		UsageLevelCard,
 	} from "$lib/components/settings";
@@ -347,6 +348,10 @@
 					{saving}
 					onSelect={selectUsageLevel}
 				/>
+
+				{#if $usageLevel === "expert"}
+					<ThemeSchemeCard />
+				{/if}
 
 				<div class="card">
 					<div class="section-label">Доступ</div>

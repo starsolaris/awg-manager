@@ -118,7 +118,7 @@
 		padding: 1px 6px;
 		border-radius: 9999px;
 		background: var(--accent);
-		color: white;
+		color: var(--color-accent-contrast, #ffffff);
 		font-weight: 500;
 		white-space: nowrap;
 		flex-shrink: 0;

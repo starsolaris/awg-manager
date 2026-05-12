@@ -360,8 +360,8 @@
 		display: inline-flex;
 		align-self: flex-start;
 		padding: 0.15rem 0.5rem;
-		background: var(--color-primary, #3b82f6);
-		color: white;
+		background: var(--color-accent, #3b82f6);
+		color: var(--color-accent-contrast, #ffffff);
 		border-radius: 3px;
 		font-size: 0.72rem;
 		font-weight: 500;

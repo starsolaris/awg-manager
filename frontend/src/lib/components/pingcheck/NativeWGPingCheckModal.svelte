@@ -214,7 +214,7 @@
 	.preset-btn:hover:not(:disabled) {
 		background: var(--color-accent);
 		border-color: var(--color-accent);
-		color: white;
+		color: var(--color-accent-contrast, #ffffff);
 	}
 
 	.preset-btn:disabled {

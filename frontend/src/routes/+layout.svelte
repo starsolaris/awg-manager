@@ -335,7 +335,7 @@
 		{hasUpdate}
 		{isPreRelease}
 		bind:mobileMenuOpen
-		onToggleTheme={() => theme.toggle()}
+		onToggleThemeMode={() => theme.toggleMode()}
 		onLogout={() => auth.logout()}
 		onOpenDonate={() => (donateModalOpen = true)}
 	/>
