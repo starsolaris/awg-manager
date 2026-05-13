@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { auth } from '$lib/stores/auth';
 	import { Button } from '$lib/components/ui';
+	import BrandLogoMark from '$lib/components/layout/BrandLogoMark.svelte';
 
 	let login = $state('');
 	let password = $state('');
@@ -24,9 +25,9 @@
 <div class="login-container">
 	<div class="login-card">
 		<div class="login-header">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="login-icon">
-				<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-			</svg>
+			<div class="login-brand">
+				<BrandLogoMark dimension={52} />
+			</div>
 			<h1>AWG Manager</h1>
 			<p class="login-subtitle">Введите данные от роутера Keenetic</p>
 		</div>
@@ -112,10 +113,9 @@
 		margin-bottom: 1.5rem;
 	}
 
-	.login-icon {
-		width: 48px;
-		height: 48px;
-		color: var(--accent);
+	.login-brand {
+		display: flex;
+		justify-content: center;
 		margin-bottom: 0.75rem;
 	}
 
