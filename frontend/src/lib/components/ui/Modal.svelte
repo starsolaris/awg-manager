@@ -1,5 +1,6 @@
 <script lang="ts">
     import type { Snippet } from 'svelte';
+    import ConfirmModal from './ConfirmModal.svelte';
 
     interface Props {
         open: boolean;
@@ -15,6 +16,14 @@
          * cancel button + Esc handling (Esc stays enabled regardless).
          */
         closeOnBackdrop?: boolean;
+        /**
+         * Returns true if the embedded form has unsaved user input. When provided
+         * and returns true, the backdrop click, Esc keypress, and the close-X button
+         * show a ConfirmModal before invoking onclose. The explicit footer Cancel
+         * button is sacred — it bypasses this and calls onclose directly, treating
+         * the click as the user's deliberate discard gesture.
+         */
+        hasUnsavedChanges?: () => boolean;
     }
 
     let {
@@ -25,6 +34,7 @@
         children,
         actions,
         closeOnBackdrop = true,
+        hasUnsavedChanges,
     }: Props = $props();
 
     const sizeClasses = {
@@ -34,9 +44,25 @@
         xl: 'max-w-xl'
     };
 
+    function attemptClose() {
+        let dirty = false;
+        try {
+            dirty = hasUnsavedChanges?.() === true;
+        } catch {
+            // Treat thrown check as clean — better to let the user out than trap
+            // them in a modal whose dirty detector is broken.
+            dirty = false;
+        }
+        if (dirty) {
+            confirmOpen = true;
+        } else {
+            onclose();
+        }
+    }
+
     function handleKeydown(e: KeyboardEvent) {
         if (e.key === 'Escape') {
-            onclose();
+            attemptClose();
         }
     }
 
@@ -47,6 +73,7 @@
     // click to land on the backdrop element itself.
     let backdropEl: HTMLElement | null = $state(null);
     let pointerDownOnBackdrop = false;
+    let confirmOpen = $state(false);
 
     function handleBackdropPointerDown(e: PointerEvent) {
         pointerDownOnBackdrop = e.target === backdropEl;
@@ -57,7 +84,7 @@
         if (e.target !== backdropEl) return;
         if (!pointerDownOnBackdrop) return;
         pointerDownOnBackdrop = false;
-        onclose();
+        attemptClose();
     }
 
     // Portal action: moves the backdrop to <body> so it escapes any
@@ -100,7 +127,7 @@
                 <h3 id="modal-title">{title}</h3>
                 <button
                     class="modal-close"
-                    onclick={onclose}
+                    onclick={attemptClose}
                     aria-label="Close modal"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -120,6 +147,16 @@
             {/if}
         </div>
     </div>
+    <ConfirmModal
+        open={confirmOpen}
+        title="Несохранённые изменения"
+        message="Вы внесли изменения в форме. Закрыть без сохранения?"
+        confirmLabel="Закрыть без сохранения"
+        cancelLabel="Продолжить редактирование"
+        variant="danger"
+        onConfirm={() => { confirmOpen = false; onclose(); }}
+        onClose={() => { confirmOpen = false; }}
+    />
 {/if}
 
 <style>
