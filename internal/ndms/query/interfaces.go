@@ -414,12 +414,18 @@ func (s *InterfaceStore) ListWAN(ctx context.Context) ([]wan.Interface, error) {
 // dropping awg-manager's own kernel interfaces (opkgtun*, awgm*).
 // Sorted by Name for deterministic UI rendering. Uses
 // ResolveSystemName for kernel-name lookup (see notes on ListWAN).
+//
+// Deduplicates by kernel Name: if multiple NDMS entries resolve to the
+// same kernel ifname (e.g. a stale stub from a failed bootstrap fetch
+// coexists with the real entry), the Up=true entry wins; on a tie the
+// first seen is kept. Collisions are warn-logged with both NDMS IDs.
 func (s *InterfaceStore) ListAll(ctx context.Context) ([]ndms.AllInterface, error) {
 	all, err := s.List(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]ndms.AllInterface, 0, len(all))
+	seen := make(map[string]ndms.AllInterface, len(all))
+	winnerID := make(map[string]string, len(all))
 	for _, iface := range all {
 		kernelName := s.ResolveSystemName(ctx, iface.ID)
 		if kernelName == "" {
@@ -431,11 +437,29 @@ func (s *InterfaceStore) ListAll(ctx context.Context) ([]ndms.AllInterface, erro
 		if isOwnTunnel(kernelName) {
 			continue
 		}
-		out = append(out, ndms.AllInterface{
+		candidate := ndms.AllInterface{
 			Name:  kernelName,
 			Label: allInterfaceLabel(iface.Type, kernelName, iface.Description),
 			Up:    iface.State == "up" && iface.IPv4 == "running",
-		})
+		}
+		existing, dup := seen[kernelName]
+		if !dup {
+			seen[kernelName] = candidate
+			winnerID[kernelName] = iface.ID
+			continue
+		}
+		prevWinner := winnerID[kernelName]
+		kept, dropped := prevWinner, iface.ID
+		if candidate.Up && !existing.Up {
+			seen[kernelName] = candidate
+			winnerID[kernelName] = iface.ID
+			kept, dropped = iface.ID, prevWinner
+		}
+		s.log.Warnf("ListAll: duplicate kernel name %q from NDMS IDs %q and %q; kept %q", kernelName, kept, dropped, kept)
+	}
+	out := make([]ndms.AllInterface, 0, len(seen))
+	for _, v := range seen {
+		out = append(out, v)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil

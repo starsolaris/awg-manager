@@ -3,7 +3,9 @@ package query
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -855,4 +857,120 @@ func TestInterfaceStore_Concurrent_ReadWrite(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	close(stop)
 	wg.Wait()
+}
+
+// === ListAll dedup ===
+
+// dedupCaptureLogger records every Warnf call so tests can assert
+// observability of duplicate-kernel-name collisions.
+type dedupCaptureLogger struct {
+	mu   sync.Mutex
+	msgs []string
+}
+
+func (c *dedupCaptureLogger) Warnf(format string, args ...any) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.msgs = append(c.msgs, fmt.Sprintf(format, args...))
+}
+
+// Two NDMS entries (`GigabitEthernet1` and `ISP`) both resolve to the
+// same kernel ifname `eth1`. The first is fully running (ipv4: running);
+// the second has ipv4: pending — a stub-like layer state. ListAll must
+// dedupe to a single entry, keep the running one regardless of map
+// iteration order, and warn-log the collision with both NDMS IDs plus
+// the kept ID.
+func TestInterfaceStore_ListAll_DeduplicatesByKernelName_UpWins(t *testing.T) {
+	fg := newFakeGetter()
+	fg.SetJSON(ifaceListPath, `{
+		"GigabitEthernet1": {
+			"id": "GigabitEthernet1",
+			"interface-name": "eth1",
+			"type": "GigabitEthernet",
+			"description": "real eth1",
+			"state": "up",
+			"summary": {"layer": {"ipv4": "running", "conf": "running"}}
+		},
+		"ISP": {
+			"id": "ISP",
+			"interface-name": "eth1",
+			"type": "GigabitEthernet",
+			"description": "stale stub",
+			"state": "up",
+			"summary": {"layer": {"ipv4": "pending", "conf": "running"}}
+		}
+	}`)
+	log := &dedupCaptureLogger{}
+	s := NewInterfaceStore(fg, log)
+
+	got, err := s.ListAll(context.Background())
+	if err != nil {
+		t.Fatalf("ListAll: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len: want 1 (deduplicated), got %d: %+v", len(got), got)
+	}
+	if got[0].Name != "eth1" {
+		t.Errorf("Name: want eth1, got %q", got[0].Name)
+	}
+	if !got[0].Up {
+		t.Errorf("Up: want true (running entry must win over stub), got false")
+	}
+	if got[0].Label != "real eth1" {
+		t.Errorf("Label: want %q (description of running entry), got %q", "real eth1", got[0].Label)
+	}
+	if len(log.msgs) != 1 {
+		t.Fatalf("expected 1 warn-log, got %d: %v", len(log.msgs), log.msgs)
+	}
+	msg := log.msgs[0]
+	for _, want := range []string{"duplicate", "eth1", "GigabitEthernet1", "ISP", `kept "GigabitEthernet1"`} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("warn missing %q: %s", want, msg)
+		}
+	}
+}
+
+// Both candidates are fully Up; tie-break keeps the first-seen entry,
+// but List() iterates a map so insertion order is undefined. Assert
+// only that dedup collapses to one entry and that the collision is
+// warn-logged.
+func TestInterfaceStore_ListAll_DeduplicatesByKernelName_TieKeepsOne(t *testing.T) {
+	fg := newFakeGetter()
+	fg.SetJSON(ifaceListPath, `{
+		"GigabitEthernet1": {
+			"id": "GigabitEthernet1",
+			"interface-name": "eth1",
+			"type": "GigabitEthernet",
+			"description": "first",
+			"state": "up",
+			"summary": {"layer": {"ipv4": "running", "conf": "running"}}
+		},
+		"ISP": {
+			"id": "ISP",
+			"interface-name": "eth1",
+			"type": "GigabitEthernet",
+			"description": "second",
+			"state": "up",
+			"summary": {"layer": {"ipv4": "running", "conf": "running"}}
+		}
+	}`)
+	log := &dedupCaptureLogger{}
+	s := NewInterfaceStore(fg, log)
+
+	got, err := s.ListAll(context.Background())
+	if err != nil {
+		t.Fatalf("ListAll: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len: want 1 (deduplicated), got %d: %+v", len(got), got)
+	}
+	if got[0].Name != "eth1" {
+		t.Errorf("Name: want eth1, got %q", got[0].Name)
+	}
+	if !got[0].Up {
+		t.Errorf("Up: want true (both candidates were Up), got false")
+	}
+	if len(log.msgs) != 1 {
+		t.Fatalf("expected 1 warn-log, got %d: %v", len(log.msgs), log.msgs)
+	}
 }
