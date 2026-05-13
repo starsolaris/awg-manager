@@ -62,6 +62,7 @@
 
     function handleKeydown(e: KeyboardEvent) {
         if (e.key === 'Escape') {
+            if (confirmOpen) return; // ConfirmModal owns Esc while open
             attemptClose();
         }
     }
@@ -74,6 +75,10 @@
     let backdropEl: HTMLElement | null = $state(null);
     let pointerDownOnBackdrop = false;
     let confirmOpen = $state(false);
+
+    $effect(() => {
+        if (!open) confirmOpen = false;
+    });
 
     function handleBackdropPointerDown(e: PointerEvent) {
         pointerDownOnBackdrop = e.target === backdropEl;
@@ -147,16 +152,18 @@
             {/if}
         </div>
     </div>
-    <ConfirmModal
-        open={confirmOpen}
-        title="Несохранённые изменения"
-        message="Вы внесли изменения в форме. Закрыть без сохранения?"
-        confirmLabel="Закрыть без сохранения"
-        cancelLabel="Продолжить редактирование"
-        variant="danger"
-        onConfirm={() => { confirmOpen = false; onclose(); }}
-        onClose={() => { confirmOpen = false; }}
-    />
+    {#if hasUnsavedChanges}
+        <ConfirmModal
+            open={confirmOpen}
+            title="Несохранённые изменения"
+            message="Вы внесли изменения в форме. Закрыть без сохранения?"
+            confirmLabel="Закрыть без сохранения"
+            cancelLabel="Продолжить редактирование"
+            variant="danger"
+            onConfirm={() => { confirmOpen = false; onclose(); }}
+            onClose={() => { confirmOpen = false; }}
+        />
+    {/if}
 {/if}
 
 <style>
