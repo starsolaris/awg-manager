@@ -167,13 +167,13 @@
 		color: var(--text-muted);
 	}
 
-	.login-terms a {
+	.login-hint a {
 		color: var(--color-accent, var(--text-muted));
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}
 
-	.login-terms a:hover {
+	.login-hint a:hover {
 		opacity: 0.8;
 	}
 </style>

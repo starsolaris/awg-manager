@@ -92,6 +92,13 @@
         untrack(() => loadHistory(tag));
     });
     const endpointText = $derived(`${activeMember.server}:${activeMember.port}`);
+    /** List row: title above IP — prefer remark, else outbound tag. */
+    const listActiveServerName = $derived(
+        activeMember.label?.trim() || activeMember.tag?.trim() || '',
+    );
+    const activeEndpointTitle = $derived(
+        listActiveServerName ? `${listActiveServerName} · ${endpointText}` : endpointText,
+    );
     const isURLTest = $derived(subscription.mode === 'urltest');
     const lastFetchedHuman = $derived(
         subscription.lastFetched ? formatRelativeTime(subscription.lastFetched) : '—',
@@ -218,8 +225,15 @@
             <div class="lc lc-mode" data-label="Режим">
                 {isURLTest ? 'URLTest' : 'Selector'}
             </div>
-            <div class="lc lc-endpoint mono" data-label="Активный сервер">
-                {#if showEndpoint}{endpointText}{:else}••••••••{/if}
+            <div class="lc lc-endpoint" data-label="Активный сервер" title={activeEndpointTitle}>
+                <div class="lc-endpoint-stack">
+                    {#if listActiveServerName}
+                        <span class="lc-endpoint-name" title={listActiveServerName}>{listActiveServerName}</span>
+                    {/if}
+                    <span class="lc-endpoint-host mono">
+                        {#if showEndpoint}{endpointText}{:else}••••••••{/if}
+                    </span>
+                </div>
                 <button
                     type="button"
                     class="eye-mini"
@@ -824,9 +838,37 @@
     }
     .lc-endpoint {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 0.25rem;
+        min-width: 0;
         overflow: hidden;
+    }
+    .lc-endpoint-stack {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.12rem;
+        min-width: 0;
+        flex: 1;
+    }
+    .lc-endpoint-name {
+        width: 100%;
+        font-size: 0.78rem;
+        font-weight: 500;
+        color: var(--color-text-primary);
+        line-height: 1.2;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .lc-endpoint-host {
+        width: 100%;
+        font-size: 0.72rem;
+        line-height: 1.2;
+        color: var(--color-text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
     .eye-mini {
         display: inline-flex;
@@ -836,6 +878,7 @@
         color: var(--color-text-muted);
         cursor: pointer;
         flex-shrink: 0;
+        align-self: center;
     }
     .lc-actions {
         flex-wrap: wrap;
