@@ -8,6 +8,7 @@
 		type SubscriptionMode,
 	} from '$lib/types';
 	import HeadersTextarea from './HeadersTextarea.svelte';
+	import ShareLinksTextarea from './ShareLinksTextarea.svelte';
 	import { DEFAULT_PRESET, parseHeadersText } from './headersParser';
 	import {
 		mergePastedShareList,
@@ -280,14 +281,13 @@
 					Sing-box не установлен — установи в настройках перед добавлением туннелей.
 				</div>
 			{/if}
-			<textarea
-				class="inp links-area"
+			<ShareLinksTextarea
 				bind:value={singleLinks}
 				placeholder={`vless://uuid@host:443?...#Germany\nhysteria2://pass@host:8443#Finland`}
-				rows="6"
+				rows={6}
 				disabled={!singboxInstalled || submitting}
 				onpaste={(e) => onShareListPaste(e, () => singleLinks, (v) => (singleLinks = v))}
-			></textarea>
+			/>
 			{#if error}<div class="err">{error}</div>{/if}
 			{#if singleResult && singleResult.errors.length > 0}
 				<div class="err">
@@ -335,13 +335,12 @@
 			{:else}
 				<label class="row">
 					<span class="lbl">Ссылки на серверы (по одной на строку)</span>
-					<textarea
-						class="inp inline-area"
+					<ShareLinksTextarea
 						bind:value={inlineText}
 						placeholder={`vless://...\ntrojan://...\nhysteria2://...`}
-						rows="6"
+						rows={6}
 						onpaste={(e) => onShareListPaste(e, () => inlineText, (v) => (inlineText = v))}
-					></textarea>
+					/>
 					<span class="hint">
 						Поддерживаются share-link'и, Clash YAML и sing-box JSON.
 						Список ссылок через пробел при вставке разбивается на строки.
@@ -509,12 +508,6 @@
 		border: 1px solid var(--color-border);
 		border-radius: 4px;
 		color: var(--color-text-primary);
-	}
-	.inline-area, .links-area {
-		font-family: var(--font-mono, ui-monospace, monospace);
-		font-size: 0.78rem;
-		min-height: 140px;
-		resize: vertical;
 	}
 	.hint {
 		font-size: 0.74rem;
