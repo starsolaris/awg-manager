@@ -104,7 +104,6 @@ func TestAll_CategoryConstantsOnly(t *testing.T) {
 }
 
 func TestAll_VernetteURLs(t *testing.T) {
-	const vernettePrefix = "https://github.com/vernette/rulesets/raw/master/srs/"
 	wantVernette := map[string]string{
 		"telegram":  "telegram.srs",
 		"whatsapp":  "whatsapp.srs",
@@ -132,7 +131,7 @@ func TestAll_VernetteURLs(t *testing.T) {
 			t.Errorf("preset %q has no RuleSets", id)
 			continue
 		}
-		wantURL := vernettePrefix + file
+		wantURL := vernetteSRSRoot + file
 		if p.RuleSets[0].URL != wantURL {
 			t.Errorf("preset %q URL mismatch: got %s, want %s", id, p.RuleSets[0].URL, wantURL)
 		}
