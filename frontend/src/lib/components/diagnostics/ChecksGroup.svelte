@@ -76,7 +76,10 @@
 		onToggle: () => void;
 		/** Called when user clicks the per-group quick-run button. Omit to hide it. */
 		onRun?: () => void;
-		running?: boolean;
+		/** True only for this specific group's active run (controls button label). */
+		groupRunning?: boolean;
+		/** True when any diagnostic run is in progress (disables all run buttons). */
+		anyRunning?: boolean;
 		actions?: Snippet;
 		body?: Snippet;
 		highlight?: boolean;
@@ -93,7 +96,8 @@
 		expanded,
 		onToggle,
 		onRun,
-		running = false,
+		groupRunning = false,
+		anyRunning = false,
 		actions,
 		body,
 		highlight = false,
@@ -103,6 +107,7 @@
 	const isSingbox = $derived(!isGlobal && !kind?.startsWith('awg') && kind !== 'wg');
 	const plannedTests = $derived(getPlannedTests(isGlobal, isSingbox));
 	const showPlanned = $derived(expanded && !body && tests.length === 0);
+	const runBtnLabel = $derived(groupRunning ? '⟳ Идёт' : 'Проверить');
 </script>
 
 <section class="group" class:highlight class:expanded>
@@ -129,10 +134,9 @@
 				variant="secondary"
 				size="sm"
 				onclick={(e) => { e.stopPropagation(); onRun?.(); }}
-				disabled={running}
-				loading={running}
+				disabled={anyRunning}
 			>
-				{running ? 'Идёт' : 'Проверить'}
+				{runBtnLabel}
 			</Button>
 		{/if}
 		{#if actions}{@render actions()}{/if}

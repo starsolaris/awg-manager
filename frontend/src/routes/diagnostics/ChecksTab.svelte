@@ -34,6 +34,8 @@
 	});
 
 	let dnsCheckTrigger = $state(0);
+	/** ID туннеля, который сейчас проверяется кнопкой ▷. Пусто = полный прогон. */
+	let activeTunnelId = $state('');
 
 	let running = $derived($diagnosticsStore.running);
 	let currentPhase = $derived($diagnosticsStore.currentPhase);
@@ -106,6 +108,7 @@
 					if (event.test) diagnosticsStore.addTest(event.test, visibleTunnels);
 					break;
 				case 'done':
+					activeTunnelId = '';
 					if (single) {
 						diagnosticsStore.finishSingle();
 					} else if (event.summary) {
@@ -114,6 +117,7 @@
 					cleanup();
 					break;
 				case 'error':
+					activeTunnelId = '';
 					diagnosticsStore.fail(event.message ?? 'Ошибка диагностики');
 					cleanup();
 					break;
@@ -122,6 +126,7 @@
 	}
 
 	function start() {
+		activeTunnelId = '';
 		diagnosticsStore.start(visibleTunnels);
 		expandedMap = {};
 		dnsCheckTrigger++;
@@ -137,10 +142,11 @@
 		diagnosticsStore.startSingleTunnel(tunnelId, visibleTunnels);
 		expandedMap = { ...expandedMap, [tunnelId]: true };
 		cleanup();
+		activeTunnelId = tunnelId;
 		eventSource = api.streamDiagnostics(
 			false,
 			makeEventHandler(true),
-			() => diagnosticsStore.fail('Соединение потеряно'),
+			() => { activeTunnelId = ''; diagnosticsStore.fail('Соединение потеряно'); },
 			tunnelId,
 		);
 	}
@@ -197,7 +203,8 @@
 			expanded={!!expandedMap[target.id]}
 			onToggle={() => toggle(target.id)}
 			onRun={() => startSingle(target.id)}
-			{running}
+			groupRunning={running && activeTunnelId === target.id}
+			anyRunning={running}
 		/>
 	{/each}
 
