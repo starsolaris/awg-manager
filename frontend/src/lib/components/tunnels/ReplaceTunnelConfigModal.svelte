@@ -418,15 +418,6 @@
         margin: 6px 0 0;
     }
 
-    .link-preview {
-        min-height: 120px;
-        margin-top: 8px;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        opacity: 0.85;
-        cursor: default;
-    }
-
     .name-field {
         margin-top: 16px;
     }

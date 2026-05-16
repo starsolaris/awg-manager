@@ -872,12 +872,6 @@ AllowedIPs = 0.0.0.0/0"
 		border-radius: 8px;
 	}
 
-	.premium-cp-note a {
-		color: var(--color-accent);
-		text-decoration: underline;
-		text-underline-offset: 2px;
-	}
-
 	.premium-actions {
 		display: flex;
 		flex-wrap: wrap;
