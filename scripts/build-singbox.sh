@@ -20,6 +20,7 @@ DEFAULT_SINGBOX_VERSION="$(sed -n 's/^const RequiredVersion = "\(.*\)"/\1/p' "$R
 SINGBOX_VERSION="${SINGBOX_VERSION_ARG:-${SINGBOX_VERSION:-$DEFAULT_SINGBOX_VERSION}}"
 SINGBOX_REF="${SINGBOX_REF:-v$SINGBOX_VERSION}"
 SINGBOX_GO="${SINGBOX_GO:-go}"
+SINGBOX_LOW_MEMORY="${SINGBOX_LOW_MEMORY:-1}"
 CRONET_GO_DIR="${CRONET_GO_DIR:-$HOME/cronet-go}"
 RELEASE_REPO="${RELEASE_REPO:-miuirussia/awg-manager}"
 RELEASE_TAG="${RELEASE_TAG:-latest}"
@@ -101,6 +102,14 @@ fi
 
 cd "$SINGBOX_DIR"
 
+append_tag() {
+    local tag="$1"
+    case ",$TAGS," in
+        *,"$tag",*) ;;
+        *) TAGS="$TAGS,$tag" ;;
+    esac
+}
+
 if [[ "$NAIVE" == true ]]; then
     CRONET_REF="$(cat .github/CRONET_GO_VERSION)"
     if [[ ! -d "$CRONET_GO_DIR/.git" ]]; then
@@ -137,6 +146,12 @@ else
     CGO_ENABLED_VALUE="0"
 fi
 
+if [[ "$SINGBOX_LOW_MEMORY" == "1" || "$SINGBOX_LOW_MEMORY" == "true" ]]; then
+    append_tag with_low_memory
+fi
+
+echo "Build tags: $TAGS"
+
 LDFLAGS_SHARED="$(cat release/LDFLAGS)"
 OUTPUT_TMP="$PROJECT_ROOT/build/sing-box-$SINGBOX_VERSION-$ENTWARE_ARCH"
 OUTPUT="$PROJECT_ROOT/dist/sing-box-$SINGBOX_VERSION-$ENTWARE_ARCH"
@@ -155,6 +170,10 @@ env "${ENV_VARS[@]}" "$SINGBOX_GO" build -v -trimpath \
     -tags "$TAGS" \
     -ldflags "-X 'github.com/sagernet/sing-box/constant.Version=$SINGBOX_VERSION' $LDFLAGS_SHARED -s -w -buildid=" \
     ./cmd/sing-box
+
+if [[ -n "${STRIP:-}" ]] && command -v "$STRIP" >/dev/null 2>&1; then
+    "$STRIP" --strip-all "$OUTPUT_TMP" || echo "WARNING: strip failed, keeping unstripped binary" >&2
+fi
 
 mv "$OUTPUT_TMP" "$OUTPUT"
 chmod +x "$OUTPUT"
