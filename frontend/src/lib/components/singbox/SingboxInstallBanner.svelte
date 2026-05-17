@@ -44,8 +44,8 @@
 	const STORAGE_KEY = 'awgm:singbox-banner-dismissed';
 
 	// Signature changes when install/proxyComponent/features state
-	// changes. Include the sing-box version pair in the update prompt so a
-	// newly-bumped RequiredVersion asks again even if an older prompt was
+	// changes. Include version + required SHA in the update prompt so a
+	// same-version binary rebuild asks again if an older prompt was
 	// dismissed.
 	let signature = $derived.by(() => {
 		const s = $singboxStatus.data;
@@ -53,7 +53,7 @@
 		if (!s.installed) return 'not-installed';
 		if (!s.proxyComponent) return 'no-proxy-component';
 		if (s.updateAvailable) {
-			return `update-available:${s.currentVersion ?? 'unknown'}:${s.requiredVersion ?? 'unknown'}`;
+			return `update-available:${s.currentVersion ?? 'unknown'}:${s.requiredVersion ?? 'unknown'}:${s.requiredSha256 ?? 'unknown'}`;
 		}
 		// NaiveProxy requires the with_naive_outbound build tag. When
 		// the installed binary lacks it, naive outbounds silently fail
@@ -164,10 +164,20 @@
 	<div class="banner banner-stack">
 		<div class="banner-row">
 			<div class="text">
-				<strong>Доступна новая версия sing-box</strong>
+				<strong>
+					{#if $singboxStatus.data?.currentVersion === $singboxStatus.data?.requiredVersion}
+						Доступно обновление sing-box
+					{:else}
+						Доступна новая версия sing-box
+					{/if}
+				</strong>
 				<span>
-					Текущая <code>{$singboxStatus.data?.currentVersion ?? '—'}</code> →
-					<code>{$singboxStatus.data?.requiredVersion}</code>
+					{#if $singboxStatus.data?.currentVersion === $singboxStatus.data?.requiredVersion}
+						Версия <code>{$singboxStatus.data?.requiredVersion}</code>, обновилась контрольная сумма сборки
+					{:else}
+						Текущая <code>{$singboxStatus.data?.currentVersion ?? '—'}</code> →
+						<code>{$singboxStatus.data?.requiredVersion}</code>
+					{/if}
 				</span>
 			</div>
 			{#if !progress}

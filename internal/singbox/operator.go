@@ -1039,7 +1039,14 @@ func (o *Operator) GetStatus(ctx context.Context) Status {
 	}
 	s.CurrentVersion = s.Version
 	s.RequiredVersion = o.RequiredVersion()
-	s.UpdateAvailable = s.CurrentVersion != "" && s.RequiredVersion != "" && s.CurrentVersion != s.RequiredVersion
+	if o.inst != nil && s.CurrentVersion != "" && s.RequiredVersion != "" {
+		s.CurrentSHA256, _ = o.inst.CurrentSHA256()
+		s.RequiredSHA256 = o.inst.RequiredSHA256()
+		s.UpdateAvailable = s.CurrentVersion != s.RequiredVersion ||
+			(s.CurrentSHA256 != "" && s.RequiredSHA256 != "" && !strings.EqualFold(s.CurrentSHA256, s.RequiredSHA256))
+	} else {
+		s.UpdateAvailable = s.CurrentVersion != "" && s.RequiredVersion != "" && s.CurrentVersion != s.RequiredVersion
+	}
 	return s
 }
 
@@ -1658,12 +1665,12 @@ func (o *Operator) Install(ctx context.Context) error {
 
 // Update replaces an installed managed binary with the version this
 // awg-manager build is pinned to. Stops sing-box, swaps the binary, restarts.
-// No-op when current and required versions match.
+// No-op when current binary matches both the required version and SHA256.
 func (o *Operator) Update(ctx context.Context) error {
 	if o.inst == nil {
 		return fmt.Errorf("installer not wired")
 	}
-	if o.inst.CurrentVersion(ctx) == o.inst.RequiredVersion() {
+	if o.inst.MatchesRequired(ctx) {
 		return nil
 	}
 	report := func(phase string, downloaded, total int64, errMsg string) {

@@ -28,6 +28,8 @@ type SingboxStatusData struct {
 	Features        []string `json:"features,omitempty" example:"with_quic"`
 	CurrentVersion  string   `json:"currentVersion,omitempty" example:"1.13.11"`
 	RequiredVersion string   `json:"requiredVersion" example:"1.13.11"`
+	CurrentSHA256   string   `json:"currentSha256,omitempty" example:"76e67bb07b5c2bf4cef108c2f21a5ffaa684d124c21ffe220fc89b39cf1de934"`
+	RequiredSHA256  string   `json:"requiredSha256,omitempty" example:"76e67bb07b5c2bf4cef108c2f21a5ffaa684d124c21ffe220fc89b39cf1de934"`
 	UpdateAvailable bool     `json:"updateAvailable" example:"false"`
 }
 
