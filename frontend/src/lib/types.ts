@@ -554,6 +554,8 @@ export interface SystemInfo {
 	activeBackend: string;
 	routerIP: string;
 	bootInProgress: boolean;
+	/** >0 when started with -slow-request-ms (init script); drives Profiling log filter chip */
+	slowRequestThresholdMs?: number;
 	backendAvailability: { nativewg: boolean; kernel: boolean };
 	singbox?: {
 		installed: boolean;

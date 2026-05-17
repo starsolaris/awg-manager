@@ -511,6 +511,9 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	systemHandler.SetHydraRoute(s.hydraService)
 	systemHandler.SetSingboxOperator(s.singboxOp)
 	systemHandler.SetEventBus(s.bus)
+	if ms := int(s.config.SlowRequestThreshold / time.Millisecond); ms > 0 {
+		systemHandler.SetSlowRequestThresholdMs(ms)
+	}
 	settingsHandler := api.NewSettingsHandler(s.settings, appLog)
 	settingsHandler.SetTunnelStore(s.tunnels)
 	settingsHandler.SetPingCheckService(s.pingCheckService)
