@@ -1257,7 +1257,15 @@ export interface SingboxRouterRule {
 	port?: number[];
 	rule_set?: string[];
 	protocol?: string;
-	action: 'route' | 'reject' | 'sniff' | 'hijack-dns';
+	// When true, matches packets whose destination is private (RFC1918,
+	// loopback, link-local, CGNAT, multicast). System ip_is_private
+	// bypass rule has this set + outbound:"direct".
+	ip_is_private?: boolean;
+	// Optional — sing-box defaults to `route` when omitted. The system
+	// ip_is_private rule omits action because that's how SKeen's
+	// reference config writes it and the backend's `omitempty` mirrors
+	// the same shape.
+	action?: 'route' | 'reject' | 'sniff' | 'hijack-dns';
 	outbound?: string;
 }
 
