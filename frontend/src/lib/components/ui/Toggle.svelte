@@ -86,6 +86,7 @@
         align-items: center;
         gap: 8px;
         cursor: pointer;
+        vertical-align: middle;
     }
 
     /* Reserved slot next to the slider — prevents layout jump between
@@ -198,7 +199,7 @@
         box-shadow:
             inset 0 2px 4px rgba(0, 0, 0, 0.3),
             inset 0 -1px 2px rgba(255, 255, 255, 0.05);
-        transition: background 0.2s ease, box-shadow 0.2s ease;
+        transition: background 0.4s ease, box-shadow 0.4s ease;
         overflow: hidden;
     }
 
@@ -217,7 +218,7 @@
         box-shadow:
             0 1px 3px rgba(0, 0, 0, 0.3),
             inset 0 1px 0 rgba(255, 255, 255, 0.1);
-        transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+        transition: transform 0.2s ease, background 0.4s ease, box-shadow 0.4s ease;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -265,6 +266,52 @@
     /* Hover */
     .toggle-container.flip:hover .flip-lever {
         filter: brightness(1.15);
+    }
+
+    /* ===== Horizontal flip (size="sm" + variant="flip") ===== */
+
+    .toggle-container.sm.flip .flip-track {
+        width: 32px;
+        height: 18px;
+        border-radius: var(--radius-sm);
+        box-shadow:
+            inset 2px 0 4px rgba(0, 0, 0, 0.28),
+            inset -1px 0 2px rgba(255, 255, 255, 0.04);
+    }
+
+    .toggle-container.sm.flip .flip-lever {
+        left: 3px;
+        bottom: 3px;
+        width: 12px;
+        height: 12px;
+        border-radius: calc(var(--radius-sm) - 1px);
+    }
+
+    /* ridge — вертикальная полоска для горизонтального рычага */
+    .toggle-container.sm.flip .flip-lever::before {
+        width: 2px;
+        height: 6px;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 1px;
+    }
+
+    /* ON: рычаг едет вправо */
+    .toggle-container.sm.flip input:checked + .flip-track .flip-lever {
+        transform: translateX(14px);
+    }
+
+    /* ON: трек зеленеет */
+    .toggle-container.sm.flip input:checked + .flip-track {
+        box-shadow:
+            inset 2px 0 4px rgba(0, 0, 0, 0.15),
+            inset -1px 0 2px var(--color-success-tint),
+            0 0 6px var(--color-success-tint);
+    }
+
+    .toggle-container.sm.flip .flip-spinner {
+        width: 7px;
+        height: 7px;
+        border-width: 1.5px;
     }
 
     /* ===== Loading state ===== */

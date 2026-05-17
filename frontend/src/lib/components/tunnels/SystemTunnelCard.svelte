@@ -2,8 +2,8 @@
 	import { untrack } from 'svelte';
 	import type { SystemTunnel, ConnectivityResult } from '$lib/types';
 	import { api } from '$lib/api/client';
-	import { formatRelativeTime, formatDuration, formatBytes } from '$lib/utils/format';
-	import { TrafficChart, Button } from '$lib/components/ui';
+	import { formatRelativeTime, formatDuration, formatBytes, formatBitRate } from '$lib/utils/format';
+	import { TrafficChart, TrafficSparkline, Button, Badge } from '$lib/components/ui';
 	import { getTrafficRates, subscribeTraffic, loadHistory } from '$lib/stores/traffic';
 
 	interface Props {
@@ -96,7 +96,19 @@
 		localStorage.setItem(CHART_KEY_PREFIX + tunnel.id, String(chartExpanded));
 	}
 
-	let chartHeight = $derived(view === 'cards' ? 100 : 76);
+	let chartHeight = $derived(view === 'compact' ? 76 : 100);
+
+	let sparklineRates = $derived.by(() => {
+		const n = Math.min(rxRates.length, txRates.length);
+		if (n === 0) return [];
+		const combined: number[] = [];
+		for (let i = 0; i < n; i++) combined.push(rxRates[i] + txRates[i]);
+		return combined.slice(-28);
+	});
+
+	let inlineRxRate = $derived(rxRates.length > 0 ? rxRates[rxRates.length - 1] : 0);
+	let inlineTxRate = $derived(txRates.length > 0 ? txRates[txRates.length - 1] : 0);
+
 	let listStatusText = $derived(tunnel.status === 'up' ? (tunnel.peer?.online ? 'Активен' : 'Без handshake') : 'Выключен');
 </script>
 
@@ -228,24 +240,45 @@
 	</div>
 {:else}
 	<div
-		class="card flex flex-col gap-4 transition-[border-color] duration-200"
+		class="card flex flex-col transition-[border-color] duration-200"
 		class:status-up={tunnel.status === 'up'}
 		class:status-down={tunnel.status !== 'up'}
 		class:view-compact={view === 'compact'}
+		class:view-dense={view === 'cards'}
 	>
 		<!-- Header: name + badge + LED + connectivity -->
 		<div class="flex justify-between items-start gap-3">
 			<div class="flex flex-col gap-1 min-w-0">
-				<h3 class="tunnel-name" title={tunnel.description || tunnel.id}>{tunnel.description || tunnel.id}</h3>
-				<div class="flex items-center gap-2 flex-wrap">
-					<span class="iface-name">{tunnel.interfaceName}</span>
-					<span class="version-badge badge-system">Системный</span>
-				</div>
+				{#if view === 'cards'}
+					<div class="title-line-dense">
+						<h3 class="tunnel-name tunnel-name-dense" title={tunnel.description || tunnel.id}>
+							{tunnel.description || tunnel.id}
+						</h3>
+						<span class="tunnel-protocol">system</span>
+					</div>
+					<div class="meta-tags-dense">
+						<Badge variant="info" size="sm">Системный</Badge>
+						<span class="iface-chip-dense" title={tunnel.interfaceName}>{tunnel.interfaceName}</span>
+					</div>
+				{:else}
+					<h3 class="tunnel-name" title={tunnel.description || tunnel.id}>{tunnel.description || tunnel.id}</h3>
+					<div class="flex items-center gap-2 flex-wrap">
+						<span class="iface-name">{tunnel.interfaceName}</span>
+						<span class="version-badge badge-system">Системный</span>
+					</div>
+				{/if}
 			</div>
-			<div class="flex flex-col items-end gap-1.5 shrink-0">
+			<div
+				class="shrink-0"
+				class:flex={view !== 'cards'}
+				class:flex-col={view !== 'cards'}
+				class:items-end={view !== 'cards'}
+				class:gap-1.5={view !== 'cards'}
+				class:dense-head-controls={view === 'cards'}
+			>
 				<span class="led {ledClass}"></span>
 				{#if tunnel.status === 'up'}
-					<div class="flex items-center gap-1.5">
+					<div class:flex={view !== 'cards'} class:items-center={view !== 'cards'} class:gap-1.5={view !== 'cards'} class:contents={view === 'cards'}>
 						{#if !checkDisabled && connectivity?.connected}
 							<span class="latency-value">{connectivity.latency}ms</span>
 						{/if}
@@ -294,6 +327,70 @@
 
 		<!-- Details: endpoint + via + IPv4 + uptime + handshake -->
 		<div class="details">
+			{#if view === 'cards'}
+				<div class="details-dense-cols">
+					<div class="details-dense-col">
+						{#if tunnel.peer?.endpoint}
+							<div class="kv-stacked-stat">
+								<span class="kv-stacked-label">Сервер</span>
+								<span class="kv-endpoint">
+									<span
+										class="kv-stacked-value truncate"
+										title={showEndpoint ? tunnel.peer.endpoint : ''}
+									>
+										{showEndpoint ? tunnel.peer.endpoint : '•••••••••'}
+									</span>
+									<button
+										class="eye-btn"
+										onclick={() => showEndpoint = !showEndpoint}
+										title={showEndpoint ? 'Скрыть' : 'Показать'}
+									>
+										{#if showEndpoint}
+											<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+										{:else}
+											<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+										{/if}
+									</button>
+								</span>
+							</div>
+						{/if}
+						{#if tunnel.peer?.via}
+							<div class="kv-stacked-stat">
+								<span class="kv-stacked-label">Подключение</span>
+								<span class="kv-stacked-value" title={tunnel.peer.via}>{tunnel.peer.via}</span>
+							</div>
+						{/if}
+						{#if tunnel.address}
+							<div class="kv-stacked-stat">
+								<span class="kv-stacked-label">IPv4</span>
+								<span class="kv-stacked-value">{tunnel.address}</span>
+							</div>
+						{/if}
+					</div>
+					<div class="details-dense-col details-dense-col-right">
+						<div class="kv-stacked-stat">
+							<span class="kv-stacked-label">MTU</span>
+							<span class="kv-stacked-value">{tunnel.mtu}</span>
+						</div>
+						{#if tunnel.status === 'up'}
+							<div class="kv-stacked-stat">
+								<span class="kv-stacked-label">Uptime</span>
+								<span class="kv-stacked-value">
+									{tunnel.uptime ? formatDuration(tunnel.uptime) : '—'}
+								</span>
+							</div>
+							<div class="kv-stacked-stat">
+								<span class="kv-stacked-label">Handshake</span>
+								<span class="kv-stacked-value">
+									{tunnel.peer?.lastHandshake
+										? formatRelativeTime(tunnel.peer.lastHandshake)
+										: '—'}
+								</span>
+							</div>
+						{/if}
+					</div>
+				</div>
+			{:else}
 			{#if tunnel.peer?.endpoint}
 				<div class="flex gap-4 items-start">
 					<div class="flex flex-col gap-0.5 min-w-0 flex-1">
@@ -325,7 +422,7 @@
 			{/if}
 			{#if tunnel.address}
 				<div class="flex gap-4 items-start">
-					<div class="flex flex-col gap-0.5 min-w-0">
+					<div class="flex flex-col gap-0.5 min-w-0 flex-1">
 						<span class="detail-label">IPv4</span>
 						<span class="detail-value">{tunnel.address}</span>
 					</div>
@@ -347,6 +444,7 @@
 						</span>
 					</div>
 				</div>
+			{/if}
 			{/if}
 		</div>
 
@@ -389,24 +487,44 @@
 			</div>
 		</div>
 
-		<!-- Traffic chart (collapsible) -->
+		<!-- Traffic -->
 		{#if tunnel.status === 'up'}
-			<div class="chart-section">
-				<button type="button" class="chart-header" onclick={toggleChart}>
-					<span class="chart-label">Трафик</span>
-					<span class="chart-chevron" class:expanded={chartExpanded}>▾</span>
-				</button>
-				<div class="chart-body" class:expanded={chartExpanded}>
-					<TrafficChart
-						{rxRates}
-						{txRates}
-						rxTotal={tunnel.peer?.rxBytes ?? 0}
-						txTotal={tunnel.peer?.txBytes ?? 0}
-						height={chartHeight}
-						onclick={() => ondetail?.(tunnel.id)}
+			{#if view === 'cards'}
+				<button
+					type="button"
+					class="traffic-inline"
+					onclick={() => ondetail?.(tunnel.id)}
+					title="Открыть график трафика"
+				>
+					<TrafficSparkline
+						data={sparklineRates}
+						width={76}
+						height={20}
+						color="var(--color-accent)"
 					/>
+					<span class="traffic-inline-rates">
+						<span class="traffic-inline-rate rx">↓ {formatBitRate(inlineRxRate)}</span>
+						<span class="traffic-inline-rate tx">↑ {formatBitRate(inlineTxRate)}</span>
+					</span>
+				</button>
+			{:else}
+				<div class="chart-section">
+					<button type="button" class="chart-header" onclick={toggleChart}>
+						<span class="chart-label">Трафик</span>
+						<span class="chart-chevron" class:expanded={chartExpanded}>▾</span>
+					</button>
+					<div class="chart-body" class:expanded={chartExpanded}>
+						<TrafficChart
+							{rxRates}
+							{txRates}
+							rxTotal={tunnel.peer?.rxBytes ?? 0}
+							txTotal={tunnel.peer?.txBytes ?? 0}
+							height={chartHeight}
+							onclick={() => ondetail?.(tunnel.id)}
+						/>
+					</div>
 				</div>
-			</div>
+			{/if}
 		{/if}
 	</div>
 {/if}
@@ -498,9 +616,217 @@
 		align-items: stretch;
 	}
 
+	.card.flex {
+		gap: 1rem;
+	}
+
 	.card.view-compact {
 		gap: 12px;
 		padding: 12px 14px;
+	}
+
+	.card.view-dense {
+		gap: 8px;
+		padding: 10px 12px;
+	}
+
+	.card.view-dense .details {
+		gap: 6px;
+	}
+
+	.title-line-dense {
+		display: flex;
+		align-items: baseline;
+		gap: 6px;
+		min-width: 0;
+	}
+
+	.tunnel-name-dense {
+		flex: 1 1 auto;
+		min-width: 0;
+		font-size: 0.9rem;
+		font-weight: 600;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.tunnel-protocol {
+		flex-shrink: 0;
+		font-size: 10px;
+		font-weight: 500;
+		font-family: var(--font-mono, monospace);
+		color: var(--text-muted);
+		white-space: nowrap;
+		text-transform: lowercase;
+	}
+
+	.meta-tags-dense {
+		display: flex;
+		flex-wrap: nowrap;
+		margin-top: 4px;
+		align-items: center;
+		gap: 3px;
+		min-width: 0;
+		overflow: hidden;
+	}
+
+	.card.view-dense .meta-tags-dense :global(.badge) {
+		font-size: 9px;
+		padding: 1px 5px;
+		line-height: 1.3;
+		flex-shrink: 0;
+	}
+
+	.iface-chip-dense {
+		display: inline-block;
+		min-width: 0;
+		flex-shrink: 1;
+		font-size: 9px;
+		font-weight: 500;
+		font-family: var(--font-mono, monospace);
+		line-height: 1.3;
+		padding: 1px 5px;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-tertiary);
+		color: var(--text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.card.view-dense .dense-head-controls {
+		display: flex;
+		align-items: center;
+		gap: 3px;
+	}
+
+	.card.view-dense .dense-head-controls .latency-value {
+		font-size: 10px;
+		line-height: 1;
+	}
+
+	.card.view-dense .dense-head-controls .connectivity-gear,
+	.card.view-dense .dense-head-controls .connectivity-btn {
+		width: 18px;
+		height: 18px;
+		padding: 0;
+	}
+
+	.details-dense-cols {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 10px 12px;
+		align-items: end;
+	}
+
+	.details-dense-col {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		min-width: 0;
+	}
+
+	.details-dense-col-right {
+		min-width: 4.75rem;
+	}
+
+	.kv-stacked-stat {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		min-width: 0;
+	}
+
+	.card.view-dense .kv-endpoint {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		min-width: 0;
+	}
+
+	.kv-stacked-label {
+		font-size: 9px;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--text-muted);
+		line-height: 1.2;
+	}
+
+	.kv-stacked-value {
+		font-size: 10px;
+		font-family: var(--font-mono, monospace);
+		color: var(--text-secondary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		line-height: 1.25;
+	}
+
+	.traffic-inline {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		min-width: 0;
+		padding: 4px 6px;
+		margin: 0;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: var(--color-bg-secondary);
+		cursor: pointer;
+		font: inherit;
+		color: inherit;
+		text-align: left;
+		transition: background 0.15s ease, border-color 0.15s ease;
+	}
+
+	.traffic-inline:hover {
+		background: var(--color-bg-hover);
+		border-color: var(--color-border-hover);
+	}
+
+	.traffic-inline:focus-visible {
+		outline: 2px solid var(--color-accent);
+		outline-offset: 2px;
+	}
+
+	.traffic-inline-rates {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 6px 10px;
+		min-width: 0;
+		flex: 1;
+		font-size: 10px;
+		font-family: var(--font-mono, monospace);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.traffic-inline-rate.rx {
+		color: var(--color-accent);
+	}
+
+	.traffic-inline-rate.tx {
+		color: var(--color-success);
+	}
+
+	.card.view-dense .actions-wrapper {
+		padding-top: 8px;
+	}
+
+	.card.view-dense .actions-row :global(button),
+	.card.view-dense .actions-row :global(a) {
+		padding: 0.25rem 0.5rem !important;
+		font-size: 0.6875rem !important;
+		min-height: 0 !important;
+	}
+
+	.card.view-dense .actions-row :global(button svg),
+	.card.view-dense .actions-row :global(a svg) {
+		width: 12px !important;
+		height: 12px !important;
 	}
 
 	.card.view-list {
@@ -675,9 +1001,6 @@
 
 	/* Actions */
 	.actions-wrapper {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
 		padding-top: 12px;
 		border-top: 1px solid var(--border);
 	}
@@ -766,9 +1089,14 @@
 
 	.actions-row {
 		display: flex;
-		gap: 0.5rem;
+		gap: 4px;
 		align-items: center;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
+		justify-content: center;
+	}
+
+	.card.view-compact .actions-row {
+		justify-content: flex-end;
 	}
 
 	@media (max-width: 1080px) {

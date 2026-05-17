@@ -1,10 +1,16 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import type { TunnelListItem } from '$lib/types';
-	import { Toggle, TrafficChart, VersionBadge, Badge } from '$lib/components/ui';
+	import { Toggle, TrafficChart, TrafficSparkline, VersionBadge, Badge } from '$lib/components/ui';
 	import { tunnels } from '$lib/stores/tunnels';
 	import { api } from '$lib/api/client';
-	import { formatRelativeTime, formatDuration, secondsSince, formatBytes } from '$lib/utils/format';
+	import {
+		formatRelativeTime,
+		formatDuration,
+		secondsSince,
+		formatBytes,
+		formatBitRate,
+	} from '$lib/utils/format';
 	import { getTrafficRates, subscribeTraffic, loadHistory } from '$lib/stores/traffic';
 	import ConnectivitySettingsModal from './ConnectivitySettingsModal.svelte';
 import TunnelDiagnosticsModal from '$lib/components/testing/TunnelDiagnosticsModal.svelte';
@@ -88,6 +94,18 @@ import TunnelDiagnosticsModal from '$lib/components/testing/TunnelDiagnosticsMod
 		return connData.connected ? 'connected' : 'disconnected';
 	});
 	let latencyMs = $derived(connData?.latency ?? null);
+
+	function latencyTier(ms: number): 'good' | 'warn' | 'high' | 'bad' {
+		if (ms < 80) return 'good';
+		if (ms < 130) return 'warn';
+		if (ms < 200) return 'high';
+		return 'bad';
+	}
+
+	let latencyClass = $derived.by(() => {
+		if (latencyMs === null || connectivity !== 'connected') return '';
+		return `latency-${latencyTier(latencyMs)}`;
+	});
 
 	let manualChecking = $state(false);
 	async function checkConnectivityManual(): Promise<void> {
@@ -190,7 +208,18 @@ import TunnelDiagnosticsModal from '$lib/components/testing/TunnelDiagnosticsMod
 	}
 
 	let tunnelId = $derived(tunnel.id);
-	let chartHeight = $derived(view === 'cards' ? 100 : 76);
+	let chartHeight = $derived(view === 'compact' ? 76 : 100);
+
+	let sparklineRates = $derived.by(() => {
+		const n = Math.min(rxRates.length, txRates.length);
+		if (n === 0) return [];
+		const combined: number[] = [];
+		for (let i = 0; i < n; i++) combined.push(rxRates[i] + txRates[i]);
+		return combined.slice(-28);
+	});
+
+	let inlineRxRate = $derived(rxRates.length > 0 ? rxRates[rxRates.length - 1] : 0);
+	let inlineTxRate = $derived(txRates.length > 0 ? txRates[txRates.length - 1] : 0);
 
 	$effect(() => {
 		const id = tunnelId;
@@ -212,13 +241,22 @@ import TunnelDiagnosticsModal from '$lib/components/testing/TunnelDiagnosticsMod
 	});
 
 	// ─── Card border class hook (status-tinted) ─────────────────────
-	let borderState = $derived.by<'running' | 'broken' | 'transitional' | 'disabled' | 'idle'>(() => {
-		if (tunnel.status === 'running') return 'running';
+	let borderState = $derived.by<'running' | 'recovering' | 'broken' | 'transitional' | 'disabled' | 'idle'>(() => {
+		if (tunnel.status === 'running') {
+			return tunnel.pingCheck?.status === 'recovering' ? 'recovering' : 'running';
+		}
 		if (tunnel.status === 'broken') return 'broken';
 		if (['starting', 'needs_start', 'needs_stop'].includes(tunnel.status)) return 'transitional';
 		if (tunnel.status === 'disabled') return 'disabled';
 		return 'idle';
 	});
+
+	let showLatency = $derived(
+		!isCheckDisabled &&
+		connectivity === 'connected' &&
+		latencyMs !== null &&
+		borderState !== 'recovering'
+	);
 </script>
 
 {#if view === 'list'}
@@ -263,38 +301,42 @@ import TunnelDiagnosticsModal from '$lib/components/testing/TunnelDiagnosticsMod
 					class:led-pulse={ledPulse}
 				></span>
 				<span class="list-status-text">{listStatusText}</span>
-				<span title={tunnel.hasAddressConflict ? 'Конфликт адресов — другой туннель с таким же IP уже запущен' : undefined}>
-					<Toggle
-						checked={isOn}
-						onchange={() => onToggleOnOff?.()}
-						loading={toggleLoading}
-						disabled={toggleDisabled}
-						variant="flip"
-					/>
-				</span>
-			</div>
-			{#if statusHint}
-				<div class="list-note">{statusHint}</div>
-			{/if}
-			{#if tunnel.status === 'running' || tunnel.status === 'broken'}
-				<div class="connectivity-row">
-					{#if !isCheckDisabled && connectivity === 'connected' && latencyMs !== null}
-						<span class="latency-value">{latencyMs}ms</span>
-					{/if}
+		<span
+			class:toggle-recovering={borderState === 'recovering'}
+			title={tunnel.hasAddressConflict ? 'Конфликт адресов — другой туннель с таким же IP уже запущен' : undefined}
+		>
+			<Toggle
+				checked={isOn}
+				onchange={() => onToggleOnOff?.()}
+				loading={toggleLoading}
+				disabled={toggleDisabled}
+				variant="flip"
+				size="sm"
+			/>
+		</span>
+		</div>
+		{#if statusHint}
+			<div class="list-note list-status-hint" class:recovering={borderState === 'recovering'}>{statusHint}</div>
+		{/if}
+		{#if tunnel.status === 'running' || tunnel.status === 'broken'}
+			<div class="connectivity-row" class:recovering={borderState === 'recovering'}>
+			{#if showLatency}
+				<span class="latency-value {latencyClass}">{latencyMs}ms</span>
+				{/if}
+				<button
+					class="connectivity-gear"
+					onclick={() => connectivitySettingsOpen = true}
+					title="Настройки проверки связности"
+				>
+					<svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.84 1.804A1 1 0 018.82 1h2.36a1 1 0 01.98.804l.331 1.652a6.993 6.993 0 011.929 1.115l1.598-.54a1 1 0 011.186.447l1.18 2.044a1 1 0 01-.205 1.251l-1.267 1.113a7.047 7.047 0 010 2.228l1.267 1.113a1 1 0 01.206 1.25l-1.18 2.045a1 1 0 01-1.187.447l-1.598-.54a6.993 6.993 0 01-1.929 1.115l-.33 1.652a1 1 0 01-.98.804H8.82a1 1 0 01-.98-.804l-.331-1.652a6.993 6.993 0 01-1.929-1.115l-1.598.54a1 1 0 01-1.186-.447l-1.18-2.044a1 1 0 01.205-1.251l1.267-1.114a7.05 7.05 0 010-2.227L1.821 7.773a1 1 0 01-.206-1.25l1.18-2.045a1 1 0 011.187-.447l1.598.54A6.993 6.993 0 017.51 3.456l.33-1.652zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" /></svg>
+				</button>
+				{#if !isCheckDisabled}
 					<button
-						class="connectivity-gear"
-						onclick={() => connectivitySettingsOpen = true}
-						title="Настройки проверки связности"
-					>
-						<svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.84 1.804A1 1 0 018.82 1h2.36a1 1 0 01.98.804l.331 1.652a6.993 6.993 0 011.929 1.115l1.598-.54a1 1 0 011.186.447l1.18 2.044a1 1 0 01-.205 1.251l-1.267 1.113a7.047 7.047 0 010 2.228l1.267 1.113a1 1 0 01.206 1.25l-1.18 2.045a1 1 0 01-1.187.447l-1.598-.54a6.993 6.993 0 01-1.929 1.115l-.33 1.652a1 1 0 01-.98.804H8.82a1 1 0 01-.98-.804l-.331-1.652a6.993 6.993 0 01-1.929-1.115l-1.598.54a1 1 0 01-1.186-.447l-1.18-2.044a1 1 0 01.205-1.251l1.267-1.114a7.05 7.05 0 010-2.227L1.821 7.773a1 1 0 01-.206-1.25l1.18-2.045a1 1 0 011.187-.447l1.598.54A6.993 6.993 0 017.51 3.456l.33-1.652zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" /></svg>
-					</button>
-					{#if !isCheckDisabled}
-						<button
-							class="connectivity-btn"
-							class:connected={connectivity === 'connected'}
-							class:disconnected={connectivity === 'disconnected'}
-							class:checking={manualChecking}
-							onclick={checkConnectivityManual}
+						class="connectivity-btn"
+						class:connected={connectivity === 'connected'}
+						class:disconnected={connectivity === 'disconnected'}
+						class:checking={manualChecking}
+						onclick={checkConnectivityManual}
 							title={connectivity === 'connected'
 								? 'Связь OK'
 								: connectivity === 'disconnected'
@@ -405,14 +447,16 @@ import TunnelDiagnosticsModal from '$lib/components/testing/TunnelDiagnosticsMod
 	<div
 		class="card border-{borderState}"
 		class:view-compact={view === 'compact'}
+		class:view-dense={view === 'cards'}
 	>
 		<!-- Header -->
-		<div class="header">
-			<div class="head-left">
-				<div class="title-line">
+		<div class="header" class:header-dense={view === 'cards'}>
+			{#if view === 'cards'}
+			<div class="header-dense-body">
+				<div class="tunnel-name-row">
 					<button
 						type="button"
-						class="tunnel-name"
+						class="tunnel-name tunnel-name-dense"
 						title={tunnel.name}
 						onclick={() => ondetail?.(tunnel.id)}
 					>
@@ -422,24 +466,113 @@ import TunnelDiagnosticsModal from '$lib/components/testing/TunnelDiagnosticsMod
 						<Badge variant="accent" size="sm">default</Badge>
 					{/if}
 				</div>
-				<div class="meta-line">
-					<span class="iface-name">{tunnel.interfaceName || tunnel.id}</span>
-					{#if tunnel.backend}
-						<VersionBadge kind="backend" value={tunnel.backend} />
-					{/if}
+				<div class="meta-tags-dense">
+					<span class="iface-plain-dense" title={tunnel.interfaceName || tunnel.id}>
+						{tunnel.interfaceName || tunnel.id}
+					</span>
 					{#if tunnel.awgVersion}
 						<VersionBadge kind="awg" value={tunnel.awgVersion} />
 					{/if}
+					{#if tunnel.backend}
+						<VersionBadge kind="backend" value={tunnel.backend} />
+					{/if}
 				</div>
 			</div>
+			<div class="dense-toolbar" title={statusHint || undefined}>
+				<!-- row 1: LED + toggle -->
+				<div class="dense-toolbar-top">
+					<span class="led led-{ledColor}" class:led-pulse={ledPulse}></span>
+				<span
+					class:toggle-recovering={borderState === 'recovering'}
+					title={tunnel.hasAddressConflict ? 'Конфликт адресов — другой туннель с таким же IP уже запущен' : undefined}
+				>
+					<Toggle
+						checked={isOn}
+						onchange={() => onToggleOnOff?.()}
+						loading={toggleLoading}
+						disabled={toggleDisabled}
+						size="sm"
+						variant="flip"
+					/>
+				</span>
+				</div>
+				<!-- row 2: ping + gear + wifi (only when running) -->
+				{#if tunnel.status === 'running' || tunnel.status === 'broken'}
+			<div class="dense-toolbar-bottom" class:recovering={borderState === 'recovering'}>
+			{#if showLatency}
+				<span class="latency-value {latencyClass}">{latencyMs}ms</span>
+				{/if}
+						<button
+							class="connectivity-gear"
+							onclick={() => connectivitySettingsOpen = true}
+							title="Настройки проверки связности"
+						>
+							<svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.84 1.804A1 1 0 018.82 1h2.36a1 1 0 01.98.804l.331 1.652a6.993 6.993 0 011.929 1.115l1.598-.54a1 1 0 011.186.447l1.18 2.044a1 1 0 01-.205 1.251l-1.267 1.113a7.047 7.047 0 010 2.228l1.267 1.113a1 1 0 01.206 1.25l-1.18 2.045a1 1 0 01-1.187.447l-1.598-.54a6.993 6.993 0 01-1.929 1.115l-.33 1.652a1 1 0 01-.98.804H8.82a1 1 0 01-.98-.804l-.331-1.652a6.993 6.993 0 01-1.929-1.115l-1.598.54a1 1 0 01-1.186-.447l-1.18-2.044a1 1 0 01.205-1.251l1.267-1.114a7.05 7.05 0 010-2.227L1.821 7.773a1 1 0 01-.206-1.25l1.18-2.045a1 1 0 011.187-.447l1.598.54A6.993 6.993 0 017.51 3.456l.33-1.652zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" /></svg>
+						</button>
+						{#if !isCheckDisabled}
+							<button
+								class="connectivity-btn"
+								class:connected={connectivity === 'connected'}
+								class:disconnected={connectivity === 'disconnected'}
+								class:checking={manualChecking}
+								onclick={checkConnectivityManual}
+								title={connectivity === 'connected'
+									? 'Связь OK'
+									: connectivity === 'disconnected'
+										? 'Нет связи. Нажмите для проверки'
+										: 'Проверка связи...'}
+							>
+								{#if manualChecking}
+									<span class="connectivity-spinner"></span>
+								{:else if connectivity === 'connected'}
+									<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>
+								{:else}
+									<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="2" y1="2" x2="22" y2="22"/><path d="M8.5 16.5a5 5 0 0 1 7 0"/><path d="M2 8.82a15 15 0 0 1 4.17-2.65"/><path d="M10.66 5c4.01-.36 8.14.9 11.34 3.76"/></svg>
+								{/if}
+							</button>
+						{/if}
+					</div>
+				{/if}
+			</div>
+			{:else}
+				<div class="head-left">
+					<div class="title-line">
+						<button
+							type="button"
+							class="tunnel-name"
+							title={tunnel.name}
+							onclick={() => ondetail?.(tunnel.id)}
+						>
+							{tunnel.name}
+						</button>
+						{#if tunnel.defaultRoute}
+							<Badge variant="accent" size="sm">default</Badge>
+						{/if}
+					</div>
+					<div class="meta-line">
+						<span class="iface-name">{tunnel.interfaceName || tunnel.id}</span>
+						{#if tunnel.backend}
+							<VersionBadge kind="backend" value={tunnel.backend} />
+						{/if}
+						{#if tunnel.awgVersion}
+							<VersionBadge kind="awg" value={tunnel.awgVersion} />
+						{/if}
+					</div>
+					{#if view === 'compact' && statusHint}
+						<span class="status-hint status-hint-left">{statusHint}</span>
+					{/if}
+				</div>
 
-			<div class="head-right">
-				<div class="led-toggle">
+				<div class="head-right">
+					<div class="led-toggle">
+						<span
+							class="led led-{ledColor}"
+							class:led-pulse={ledPulse}
+						></span>
 					<span
-						class="led led-{ledColor}"
-						class:led-pulse={ledPulse}
-					></span>
-					<span title={tunnel.hasAddressConflict ? 'Конфликт адресов — другой туннель с таким же IP уже запущен' : undefined}>
+						class:toggle-recovering={borderState === 'recovering'}
+						title={tunnel.hasAddressConflict ? 'Конфликт адресов — другой туннель с таким же IP уже запущен' : undefined}
+					>
 						<Toggle
 							checked={isOn}
 							onchange={() => onToggleOnOff?.()}
@@ -448,15 +581,15 @@ import TunnelDiagnosticsModal from '$lib/components/testing/TunnelDiagnosticsMod
 							variant="flip"
 						/>
 					</span>
-				</div>
-				{#if statusHint}
+					</div>
+				{#if view !== 'compact' && statusHint}
 					<span class="status-hint">{statusHint}</span>
 				{/if}
 				{#if tunnel.status === 'running' || tunnel.status === 'broken'}
-					<div class="connectivity-row">
-						{#if !isCheckDisabled && connectivity === 'connected' && latencyMs !== null}
-							<span class="latency-value">{latencyMs}ms</span>
-						{/if}
+					<div class="connectivity-row" class:recovering={borderState === 'recovering'}>
+			{#if showLatency}
+				<span class="latency-value {latencyClass}">{latencyMs}ms</span>
+				{/if}
 						<button
 							class="connectivity-gear"
 							onclick={() => connectivitySettingsOpen = true}
@@ -486,13 +619,78 @@ import TunnelDiagnosticsModal from '$lib/components/testing/TunnelDiagnosticsMod
 								{/if}
 							</button>
 						{/if}
-					</div>
-				{/if}
-			</div>
+						</div>
+					{/if}
+				</div>
+			{/if}
 		</div>
 
 		<!-- Details -->
 		<div class="details">
+			{#if view === 'cards'}
+				<div class="details-dense-cols">
+					<div class="details-dense-col">
+						<div class="kv-stacked-stat">
+							<span class="kv-stacked-label">Сервер</span>
+							<span class="kv-endpoint">
+								<span
+									class="kv-stacked-value truncate"
+									title={showEndpoint ? serverHost : ''}
+								>
+									{showEndpoint ? (serverHost || '—') : '•••••••••'}
+								</span>
+								<button
+									class="eye-btn"
+									onclick={() => showEndpoint = !showEndpoint}
+									title={showEndpoint ? 'Скрыть' : 'Показать'}
+								>
+									{#if showEndpoint}
+										<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+									{:else}
+										<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+									{/if}
+								</button>
+							</span>
+						</div>
+						{#if connectionDisplay}
+							<div class="kv-stacked-stat">
+								<span class="kv-stacked-label">Подключение</span>
+								<span class="kv-stacked-value" title={connectionDisplay}>{connectionDisplay}</span>
+							</div>
+						{/if}
+						<div class="kv-stacked-stat">
+							<span class="kv-stacked-label">IPv4</span>
+							<span class="kv-stacked-value">{addresses.ipv4 || '—'}</span>
+						</div>
+						{#if addresses.ipv6}
+							<div class="kv-stacked-stat">
+								<span class="kv-stacked-label">IPv6</span>
+								<span class="kv-stacked-value cursor-help" title={addresses.ipv6}>{ipv6Display}</span>
+							</div>
+						{/if}
+					</div>
+					<div class="details-dense-col details-dense-col-right">
+						<div class="kv-stacked-stat">
+							<span class="kv-stacked-label">Порт</span>
+							<span class="kv-stacked-value">{serverPort || '—'}</span>
+						</div>
+						{#if tunnel.status === 'running'}
+							<div class="kv-stacked-stat">
+								<span class="kv-stacked-label">Uptime</span>
+								<span class="kv-stacked-value">
+									{tunnel.startedAt ? formatDuration(secondsSince(tunnel.startedAt)) : '—'}
+								</span>
+							</div>
+							<div class="kv-stacked-stat">
+								<span class="kv-stacked-label">Handshake</span>
+								<span class="kv-stacked-value" title={tunnel.lastHandshake || ''}>
+									{tunnel.lastHandshake ? formatRelativeTime(tunnel.lastHandshake) : '—'}
+								</span>
+							</div>
+						{/if}
+					</div>
+				</div>
+			{:else}
 			<div class="kv-row">
 				<div class="kv kv-grow">
 					<span class="kv-label">Сервер</span>
@@ -564,6 +762,7 @@ import TunnelDiagnosticsModal from '$lib/components/testing/TunnelDiagnosticsMod
 					</div>
 				</div>
 			{/if}
+			{/if}
 		</div>
 
 		<!-- Actions -->
@@ -595,24 +794,44 @@ import TunnelDiagnosticsModal from '$lib/components/testing/TunnelDiagnosticsMod
 			</button>
 		</div>
 
-		<!-- Traffic chart (running only) -->
+		<!-- Traffic (running only) -->
 		{#if tunnel.status === 'running'}
-			<div class="chart-section">
-				<button type="button" class="chart-header" onclick={toggleChart}>
-					<span class="chart-label">Трафик</span>
-					<span class="chart-chevron" class:expanded={chartExpanded}>▾</span>
-				</button>
-				<div class="chart-body" class:expanded={chartExpanded}>
-					<TrafficChart
-						{rxRates}
-						{txRates}
-						rxTotal={tunnel.rxBytes ?? 0}
-						txTotal={tunnel.txBytes ?? 0}
-						height={chartHeight}
-						onclick={() => ondetail?.(tunnel.id)}
+			{#if view === 'cards'}
+				<button
+					type="button"
+					class="traffic-inline"
+					onclick={() => ondetail?.(tunnel.id)}
+					title="Открыть график трафика"
+				>
+					<TrafficSparkline
+						data={sparklineRates}
+						width={76}
+						height={20}
+						color="var(--color-accent)"
 					/>
+					<span class="traffic-inline-rates">
+						<span class="traffic-inline-rate rx">↓ {formatBitRate(inlineRxRate)}</span>
+						<span class="traffic-inline-rate tx">↑ {formatBitRate(inlineTxRate)}</span>
+					</span>
+				</button>
+			{:else}
+				<div class="chart-section">
+					<button type="button" class="chart-header" onclick={toggleChart}>
+						<span class="chart-label">Трафик</span>
+						<span class="chart-chevron" class:expanded={chartExpanded}>▾</span>
+					</button>
+					<div class="chart-body" class:expanded={chartExpanded}>
+						<TrafficChart
+							{rxRates}
+							{txRates}
+							rxTotal={tunnel.rxBytes ?? 0}
+							txTotal={tunnel.txBytes ?? 0}
+							height={chartHeight}
+							onclick={() => ondetail?.(tunnel.id)}
+						/>
+					</div>
 				</div>
-			</div>
+			{/if}
 		{/if}
 	</div>
 {/if}
@@ -647,9 +866,33 @@ import TunnelDiagnosticsModal from '$lib/components/testing/TunnelDiagnosticsMod
 	}
 
 	.card.border-running { border-color: var(--color-success-border); }
+	.card.border-recovering { border-color: var(--color-broken-border); }
 	.card.border-broken { border-color: var(--color-broken-border); }
 	.card.border-transitional { border-color: var(--color-warning-border); }
 	.card.border-disabled { border-color: var(--color-text-muted); }
+
+	/* Toggle orange tint when recovering */
+	.toggle-recovering :global(.toggle-container.flip input:checked + .flip-track),
+	.toggle-recovering :global(.toggle-container.sm.flip input:checked + .flip-track) {
+		background: color-mix(in srgb, var(--color-broken) 18%, var(--color-bg-tertiary));
+		box-shadow:
+			inset 2px 0 4px rgba(0, 0, 0, 0.18),
+			0 0 6px color-mix(in srgb, var(--color-broken) 35%, transparent);
+		transition: background 0.4s ease, box-shadow 0.4s ease;
+	}
+
+	.toggle-recovering :global(.toggle-container.flip input:checked + .flip-track .flip-lever),
+	.toggle-recovering :global(.toggle-container.sm.flip input:checked + .flip-track .flip-lever) {
+		background: linear-gradient(
+			to bottom,
+			color-mix(in srgb, var(--color-broken) 75%, white),
+			var(--color-broken)
+		);
+		box-shadow:
+			0 1px 3px rgba(0, 0, 0, 0.3),
+			0 0 5px color-mix(in srgb, var(--color-broken) 45%, transparent);
+		transition: background 0.4s ease, box-shadow 0.4s ease, transform 0.2s ease;
+	}
 
 	.list-card {
 		display: grid;
@@ -702,6 +945,16 @@ import TunnelDiagnosticsModal from '$lib/components/testing/TunnelDiagnosticsMod
 		font-size: 12px;
 		font-weight: 600;
 		color: var(--color-text-primary);
+		transition: color 0.4s ease;
+	}
+
+	.card.border-recovering .list-status-text {
+		color: var(--color-broken);
+	}
+
+	.list-status-hint.recovering {
+		color: var(--color-broken);
+		transition: color 0.4s ease;
 	}
 
 	.list-port {
@@ -747,6 +1000,274 @@ import TunnelDiagnosticsModal from '$lib/components/testing/TunnelDiagnosticsMod
 		padding: 12px 14px;
 	}
 
+	.card.view-dense {
+		gap: 8px;
+		padding: 10px 12px;
+	}
+
+	.card.view-dense .head-left {
+		gap: 3px;
+	}
+
+	.card.view-dense .details {
+		gap: 6px;
+		padding: 4px 0;
+	}
+
+	.title-line-dense {
+		display: flex;
+		align-items: baseline;
+		gap: 6px;
+		min-width: 0;
+	}
+
+	.tunnel-name-row {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		min-width: 0;
+		overflow: hidden;
+	}
+
+	.tunnel-name-row :global(.badge) {
+		flex-shrink: 0;
+		font-size: 9px;
+		padding: 1px 6px;
+		border-radius: var(--radius-sm);
+	}
+
+	.tunnel-name-dense {
+		flex: 0 1 auto;
+		min-width: 0;
+		font-size: 13px;
+		font-weight: 600;
+	}
+
+	.tunnel-protocol {
+		flex-shrink: 0;
+		font-size: 10px;
+		font-weight: 500;
+		font-family: var(--font-mono);
+		color: var(--color-text-muted);
+		white-space: nowrap;
+		letter-spacing: 0.02em;
+	}
+
+	.header.header-dense {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: flex-start;
+		gap: 6px;
+	}
+
+	.header-dense-body {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		min-width: 0;
+	}
+
+	.dense-toolbar {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		flex-shrink: 0;
+	}
+
+	.dense-toolbar-top {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.dense-toolbar-bottom {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+	}
+
+	.meta-tags-dense {
+		display: flex;
+		flex-wrap: nowrap;
+		align-items: center;
+		margin-top: 4px;
+		gap: 3px;
+		min-width: 0;
+		overflow: hidden;
+	}
+
+	.card.view-dense .meta-tags-dense :global(.badge),
+	.card.view-dense .meta-tags-dense :global(.vb) {
+		font-size: 9px;
+		padding: 1px 5px;
+		line-height: 1.3;
+		flex-shrink: 0;
+	}
+
+	.iface-plain-dense {
+		font-size: 9px;
+		font-weight: 500;
+		font-family: var(--font-mono);
+		color: var(--color-text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		flex-shrink: 1;
+		min-width: 0;
+	}
+
+	/* uniform border-radius for all badges in second row */
+	.card.view-dense .meta-tags-dense :global(.vb) {
+		border-radius: var(--radius-sm);
+	}
+
+	.card.view-dense .dense-toolbar-bottom .latency-value {
+		font-size: 9px;
+		line-height: 1;
+		font-family: var(--font-mono);
+		color: var(--color-text-muted);
+		transition: color 0.4s ease;
+	}
+
+	.card.view-dense .dense-toolbar-bottom.recovering .connectivity-btn,
+	.connectivity-row.recovering .connectivity-btn {
+		color: var(--color-broken);
+		transition: color 0.4s ease;
+	}
+
+	.card.view-dense .dense-toolbar-bottom .connectivity-gear,
+	.card.view-dense .dense-toolbar-bottom .connectivity-btn {
+		width: 16px;
+		height: 16px;
+		padding: 0;
+	}
+
+	.card.view-dense .dense-toolbar-bottom .connectivity-spinner {
+		width: 8px;
+		height: 8px;
+		border-width: 1.5px;
+	}
+
+	.card.view-dense .dense-toolbar-top .led {
+		width: 6px;
+		height: 6px;
+	}
+
+	.details-dense-cols {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 5.5rem;
+		gap: 10px 12px;
+		align-items: start;
+	}
+
+	.details-dense-col {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		min-width: 0;
+	}
+
+	.details-dense-col-right {
+		width: 100%;
+		overflow: hidden;
+	}
+
+	.kv-stacked-stat {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		min-width: 0;
+	}
+
+	.card.view-dense .kv-endpoint {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		min-width: 0;
+	}
+
+	.kv-stacked-label {
+		font-size: 9px;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-muted);
+		line-height: 1.2;
+	}
+
+	.kv-stacked-value {
+		font-size: 10px;
+		font-family: var(--font-mono);
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		line-height: 1.25;
+	}
+
+	.traffic-inline {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		min-width: 0;
+		padding: 4px 6px;
+		margin: 0;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: var(--color-bg-secondary);
+		cursor: pointer;
+		font: inherit;
+		color: inherit;
+		text-align: left;
+		transition: background var(--t-fast) ease, border-color var(--t-fast) ease;
+	}
+
+	.traffic-inline:hover {
+		background: var(--color-bg-hover);
+		border-color: var(--color-border-hover);
+	}
+
+	.traffic-inline:focus-visible {
+		outline: 2px solid var(--color-accent);
+		outline-offset: 2px;
+	}
+
+	.traffic-inline-rates {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 6px 10px;
+		min-width: 0;
+		flex: 1;
+		font-size: 10px;
+		font-family: var(--font-mono);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.traffic-inline-rate.rx {
+		color: var(--color-accent);
+	}
+
+	.traffic-inline-rate.tx {
+		color: var(--color-success);
+	}
+
+	.card.view-dense .actions {
+		gap: 2px;
+		justify-content: center;
+	}
+
+	.card.view-dense .action-btn {
+		padding: 3px 6px;
+		font-size: 10px;
+		gap: 3px;
+	}
+
+	.card.view-dense .action-btn svg {
+		width: 12px;
+		height: 12px;
+	}
+
 	.card.view-list {
 		display: grid;
 		grid-template-columns: minmax(0, 1.35fr) minmax(280px, 1fr) auto;
@@ -761,6 +1282,15 @@ import TunnelDiagnosticsModal from '$lib/components/testing/TunnelDiagnosticsMod
 		justify-content: space-between;
 		align-items: flex-start;
 		gap: 10px;
+	}
+
+	.card.view-dense .header.header-dense {
+		gap: 4px;
+	}
+
+	.card.view-dense .dense-toolbar .led {
+		width: 6px;
+		height: 6px;
 	}
 
 	.head-left {
@@ -868,6 +1398,18 @@ import TunnelDiagnosticsModal from '$lib/components/testing/TunnelDiagnosticsMod
 	.status-hint {
 		font-size: 11px;
 		color: var(--color-text-muted);
+		transition: color 0.4s ease;
+	}
+
+	.card.border-recovering .status-hint {
+		color: var(--color-broken);
+	}
+
+	.status-hint-left {
+		align-self: flex-start;
+		font-size: 11px;
+		color: var(--color-broken);
+		transition: color 0.4s ease;
 	}
 
 	.connectivity-row {
@@ -880,7 +1422,28 @@ import TunnelDiagnosticsModal from '$lib/components/testing/TunnelDiagnosticsMod
 		font-variant-numeric: tabular-nums;
 		font-size: 12px;
 		font-weight: 500;
+		color: var(--color-text-muted);
+		transition: color 0.4s ease;
+	}
+
+	.latency-value.latency-good,
+	.card.view-dense .dense-toolbar-bottom .latency-value.latency-good {
 		color: var(--color-success);
+	}
+
+	.latency-value.latency-warn,
+	.card.view-dense .dense-toolbar-bottom .latency-value.latency-warn {
+		color: var(--color-warning);
+	}
+
+	.latency-value.latency-high,
+	.card.view-dense .dense-toolbar-bottom .latency-value.latency-high {
+		color: var(--color-broken);
+	}
+
+	.latency-value.latency-bad,
+	.card.view-dense .dense-toolbar-bottom .latency-value.latency-bad {
+		color: var(--color-error);
 	}
 
 	.connectivity-gear,

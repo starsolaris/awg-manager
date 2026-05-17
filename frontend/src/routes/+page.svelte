@@ -464,7 +464,7 @@
 	let awgViewMode = $state<AwgTunnelViewMode>('compact');
 	let awgViewModeReady = false;
 	let isAwgMobile = $state(false);
-	let showAwgListViewOption = $derived($usageLevel !== 'basic');
+	let showAwgViewModeSwitch = $derived($usageLevel !== 'basic');
 	let singboxTunnelsLayoutMode = $state<SingboxLayoutMode>('grid');
 	let singboxSubscriptionsLayoutMode = $state<SingboxLayoutMode>('grid');
 	let singboxTunnelsLayoutReady = false;
@@ -482,7 +482,7 @@
 	);
 	let showSingboxGridListToggle = $derived(showSingboxListOption && !isAwgMobile);
 	let awgEffectiveViewMode = $derived<AwgTunnelViewMode>(
-		isAwgMobile || (!showAwgListViewOption && awgViewMode === 'list') ? 'compact' : awgViewMode
+		isAwgMobile || !showAwgViewModeSwitch ? 'compact' : awgViewMode
 	);
 
 	function isAwgTunnelViewMode(value: string | null): value is AwgTunnelViewMode {
@@ -823,6 +823,14 @@
 		return ['running', 'starting', 'broken'].includes(tunnel.status);
 	}
 
+	function latencyTier(ms: number | null): 'good' | 'warn' | 'high' | 'bad' {
+		if (ms === null) return 'good';
+		if (ms < 80) return 'good';
+		if (ms < 130) return 'warn';
+		if (ms < 200) return 'high';
+		return 'bad';
+	}
+
 	function managedStatusVariant(tunnel: TunnelListItem): 'success' | 'error' | 'warning' | 'muted' {
 		if (tunnel.hasAddressConflict) return 'error';
 		switch (tunnelStatusBucket(tunnel.status)) {
@@ -865,16 +873,15 @@
 			if ((tunnel.connectivityCheck?.method ?? 'http') === 'disabled') {
 				return 'Проверка связи выключена';
 			}
-			if (!connectivity) {
-				return tunnel.pingCheck.status === 'recovering' ? 'Проверка связи...' : 'Проверка...';
+			if (tunnel.pingCheck.status === 'recovering') {
+				return 'Восстановление...';
 			}
+			if (!connectivity) return 'Проверка...';
 			if (!connectivity.connected) return 'Нет связи';
 			if (connectivity.latency !== null) return `Пинг ${connectivity.latency} мс`;
 			return 'Связь есть';
 		}
-		if (tunnel.pingCheck.status === 'recovering') return 'Проверка связи восстанавливается';
-		if (tunnel.defaultRoute) return 'Туннель по умолчанию';
-		return tunnel.interfaceName || tunnel.id;
+		return '';
 	}
 
 	function managedRouteMeta(tunnel: TunnelListItem): string {
@@ -883,7 +890,7 @@
 		if (label && iface) return label === iface ? label : `${label} (${iface})`;
 		if (label) return label;
 		if (iface) return iface;
-		return 'Маршрут не указан';
+		return 'Маршрут не установлен';
 	}
 
 	function systemStatusVariant(tunnel: SystemTunnel): 'success' | 'muted' {
@@ -1153,16 +1160,32 @@
 					<StoreStatusBadge store={tunnels} />
 				</div>
 				<div class="toolbar-actions">
-					{#if !isAwgMobile}
+					{#if showAwgViewModeSwitch && !isAwgMobile}
 						<div class="view-mode-switch" role="group" aria-label="Вид туннелей">
 							<button
 								type="button"
 								class="view-mode-btn"
 								class:active={awgEffectiveViewMode === 'cards'}
 								aria-pressed={awgEffectiveViewMode === 'cards'}
-								aria-label="Большие карточки"
-								title="Большие карточки"
+								aria-label="Мелкая сетка"
+								title="Мелкая сетка"
 								onclick={() => (awgViewMode = 'cards')}
+							>
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+									<rect x="4" y="5" width="7" height="6" rx="1.5" />
+									<rect x="13" y="5" width="7" height="6" rx="1.5" />
+									<rect x="4" y="13" width="7" height="6" rx="1.5" />
+									<rect x="13" y="13" width="7" height="6" rx="1.5" />
+								</svg>
+							</button>
+							<button
+								type="button"
+								class="view-mode-btn"
+								class:active={awgEffectiveViewMode === 'compact'}
+								aria-pressed={awgEffectiveViewMode === 'compact'}
+								aria-label="Сетка"
+								title="Сетка"
+								onclick={() => (awgViewMode = 'compact')}
 							>
 								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
 									<rect x="4" y="5" width="16" height="14" rx="2" />
@@ -1173,39 +1196,21 @@
 							<button
 								type="button"
 								class="view-mode-btn"
-								class:active={awgEffectiveViewMode === 'compact'}
-								aria-pressed={awgEffectiveViewMode === 'compact'}
-								aria-label="Компактные карточки"
-								title="Компактные карточки"
-								onclick={() => (awgViewMode = 'compact')}
+								class:active={awgViewMode === 'list'}
+								aria-pressed={awgViewMode === 'list'}
+								aria-label="Список"
+								title="Список"
+								onclick={() => (awgViewMode = 'list')}
 							>
 								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-									<rect x="4" y="5" width="7" height="6" rx="1.5" />
-									<rect x="13" y="5" width="7" height="6" rx="1.5" />
-									<rect x="4" y="13" width="7" height="6" rx="1.5" />
-									<rect x="13" y="13" width="7" height="6" rx="1.5" />
+									<path d="M9 7h11" />
+									<path d="M9 12h11" />
+									<path d="M9 17h11" />
+									<circle cx="5" cy="7" r="1.2" fill="currentColor" stroke="none" />
+									<circle cx="5" cy="12" r="1.2" fill="currentColor" stroke="none" />
+									<circle cx="5" cy="17" r="1.2" fill="currentColor" stroke="none" />
 								</svg>
 							</button>
-							{#if showAwgListViewOption}
-								<button
-									type="button"
-									class="view-mode-btn"
-									class:active={awgViewMode === 'list'}
-									aria-pressed={awgViewMode === 'list'}
-									aria-label="Список"
-									title="Список"
-									onclick={() => (awgViewMode = 'list')}
-								>
-									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-										<path d="M9 7h11" />
-										<path d="M9 12h11" />
-										<path d="M9 17h11" />
-										<circle cx="5" cy="7" r="1.2" fill="currentColor" stroke="none" />
-										<circle cx="5" cy="12" r="1.2" fill="currentColor" stroke="none" />
-										<circle cx="5" cy="17" r="1.2" fill="currentColor" stroke="none" />
-									</svg>
-								</button>
-							{/if}
 						</div>
 					{/if}
 					<Button variant="secondary" size="md" onclick={handleExportAll} disabled={exporting} iconBefore={exportIcon}>
@@ -1258,14 +1263,19 @@
 						{@const rate = latestRate(tunnel.id)}
 						{@const spark = sparklineData(tunnel.id)}
 						<div class="awg-list-row">
-							<div class="awg-list-cell awg-list-cell-toggle" data-label="Старт">
-								<Toggle
-									checked={isManagedTunnelOn(tunnel)}
-									size="sm"
-									loading={toggleLoading[tunnel.id] ?? false}
-									onchange={() => handleToggleOnOff(tunnel.id)}
-								/>
-							</div>
+						<div
+							class="awg-list-cell awg-list-cell-toggle"
+							class:awg-toggle-recovering={tunnel.status === 'running' && tunnel.pingCheck.status === 'recovering'}
+							data-label="Старт"
+						>
+							<Toggle
+								checked={isManagedTunnelOn(tunnel)}
+								size="sm"
+								variant="flip"
+								loading={toggleLoading[tunnel.id] ?? false}
+								onchange={() => handleToggleOnOff(tunnel.id)}
+							/>
+						</div>
 							<div class="awg-list-cell awg-list-cell-name" data-label="Туннель">
 								<div class="awg-list-name-line">
 									<button
@@ -1303,13 +1313,18 @@
 									/>
 									<span class="awg-list-status-text">{managedStatusLabel(tunnel)}</span>
 								</div>
-								<div
-									class="awg-list-sub"
-									class:awg-list-sub--ok={isManagedTunnelOn(tunnel) && connectivity?.connected && connectivity.latency !== null}
-									class:awg-list-sub--error={tunnel.hasAddressConflict || (isManagedTunnelOn(tunnel) && !!connectivity && !connectivity.connected)}
-								>
-									{managedStatusMeta(tunnel, connectivity)}
-								</div>
+						{#if managedStatusMeta(tunnel, connectivity)}
+						<div
+						class="awg-list-sub"
+						class:awg-list-sub--ok={isManagedTunnelOn(tunnel) && connectivity?.connected && connectivity.latency !== null && latencyTier(connectivity.latency) === 'good' && tunnel.pingCheck.status !== 'recovering'}
+						class:awg-list-sub--warn={isManagedTunnelOn(tunnel) && connectivity?.connected && connectivity.latency !== null && latencyTier(connectivity.latency) === 'warn' && tunnel.pingCheck.status !== 'recovering'}
+						class:awg-list-sub--high={isManagedTunnelOn(tunnel) && connectivity?.connected && connectivity.latency !== null && latencyTier(connectivity.latency) === 'high' && tunnel.pingCheck.status !== 'recovering'}
+						class:awg-list-sub--bad={isManagedTunnelOn(tunnel) && connectivity?.connected && connectivity.latency !== null && latencyTier(connectivity.latency) === 'bad' && tunnel.pingCheck.status !== 'recovering'}
+						class:awg-list-sub--error={tunnel.hasAddressConflict || (isManagedTunnelOn(tunnel) && !!connectivity && !connectivity.connected && tunnel.pingCheck.status !== 'recovering')}
+					>
+							{managedStatusMeta(tunnel, connectivity)}
+						</div>
+						{/if}
 							</div>
 							<div class="awg-list-cell" data-label="Endpoint">
 								<div class="awg-list-kv-primary awg-list-mono awg-endpoint-line">
@@ -1601,6 +1616,7 @@
 			{:else}
 				<div
 					class="tunnel-grid"
+					class:tunnel-grid--dense={awgEffectiveViewMode === 'cards'}
 					class:tunnel-grid--compact={awgEffectiveViewMode === 'compact'}
 				>
 					{#each awgList as tunnel, i (tunnel.id)}
@@ -1631,6 +1647,7 @@
 						<h2 class="section-title">Внешние туннели</h2>
 						<div
 							class="tunnel-grid"
+							class:tunnel-grid--dense={awgEffectiveViewMode === 'cards'}
 							class:tunnel-grid--compact={awgEffectiveViewMode === 'compact'}
 						>
 							{#each externalList as extTunnel (extTunnel.interfaceName)}
@@ -2141,6 +2158,37 @@
 		height: 1rem;
 	}
 
+	:global(.tunnel-grid--dense) {
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+		gap: 8px;
+	}
+
+	:global(.tunnel-grid--dense) :global(.card),
+	:global(.tunnel-grid--dense) :global(.ext-card) {
+		gap: 8px;
+		padding: 10px 12px;
+	}
+
+	:global(.tunnel-grid--dense) :global(.ext-card.flex) {
+		gap: 0.5rem;
+	}
+
+	:global(.tunnel-grid--dense) :global(.tunnel-name) {
+		font-size: 13px;
+	}
+
+	:global(.tunnel-grid--dense) :global(.iface-name),
+	:global(.tunnel-grid--dense) :global(.status-hint),
+	:global(.tunnel-grid--dense) :global(.detail-label),
+	:global(.tunnel-grid--dense) :global(.kv-label) {
+		font-size: 10px;
+	}
+
+	:global(.tunnel-grid--dense) :global(.detail-value),
+	:global(.tunnel-grid--dense) :global(.kv-value) {
+		font-size: 12px;
+	}
+
 	:global(.tunnel-grid--compact) {
 		grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
 		gap: 12px;
@@ -2274,10 +2322,47 @@
 
 	.awg-list-sub--ok {
 		color: var(--color-success);
+		transition: color 0.4s ease;
+	}
+
+	.awg-list-sub--warn {
+		color: var(--color-warning);
+		transition: color 0.4s ease;
+	}
+
+	.awg-list-sub--high {
+		color: var(--color-broken);
+		transition: color 0.4s ease;
+	}
+
+	.awg-list-sub--bad {
+		color: var(--color-error);
+		transition: color 0.4s ease;
 	}
 
 	.awg-list-sub--error {
 		color: var(--color-error);
+	}
+
+	/* recovering toggle */
+	.awg-toggle-recovering :global(.toggle-container.sm.flip input:checked + .flip-track) {
+		background: color-mix(in srgb, var(--color-broken) 18%, var(--color-bg-tertiary));
+		box-shadow:
+			inset 2px 0 4px rgba(0, 0, 0, 0.18),
+			0 0 6px color-mix(in srgb, var(--color-broken) 35%, transparent);
+		transition: background 0.4s ease, box-shadow 0.4s ease;
+	}
+
+	.awg-toggle-recovering :global(.toggle-container.sm.flip input:checked + .flip-track .flip-lever) {
+		background: linear-gradient(
+			to bottom,
+			color-mix(in srgb, var(--color-broken) 75%, white),
+			var(--color-broken)
+		);
+		box-shadow:
+			0 1px 3px rgba(0, 0, 0, 0.3),
+			0 0 5px color-mix(in srgb, var(--color-broken) 45%, transparent);
+		transition: background 0.4s ease, box-shadow 0.4s ease, transform 0.2s ease;
 	}
 
 	.awg-list-dot {

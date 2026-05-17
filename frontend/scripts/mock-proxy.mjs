@@ -85,7 +85,7 @@ const MOCK_AWG_TUNNELS = [
 		resolvedIspInterface: 'PPPoE0',
 		resolvedIspInterfaceLabel: 'Домашний провайдер',
 		endpoint: 'de-fra.demo.example:51820',
-		address: '10.8.0.2/32, fd00:8::2/128',
+		address: '10.8.0.2/32',
 		interfaceName: 'awg0',
 		ndmsName: 'Wireguard0',
 		rxBytes: 142_320_120,
@@ -177,7 +177,7 @@ const MOCK_AWG_TUNNELS = [
 		resolvedIspInterface: 'ISP0',
 		resolvedIspInterfaceLabel: 'Резервный WAN',
 		endpoint: 'uk-lon.demo.example:51820',
-		address: '10.50.0.2/32',
+		address: '10.50.0.2/32, fd00:8::2/128',
 		interfaceName: 'awg4',
 		ndmsName: 'Wireguard4',
 		rxBytes: 0,
@@ -217,9 +217,9 @@ const MOCK_AWG_TUNNELS = [
 
 const MOCK_SYSTEM_TUNNELS = [
 	{
-		id: 'Wireguard3',
+		id: 'Wireguard6',
 		interfaceName: 'nwg0',
-		description: 'US New York (system)',
+		description: 'St Petersburg SYS',
 		status: 'down',
 		connected: true,
 		mtu: 1420,
@@ -233,6 +233,26 @@ const MOCK_SYSTEM_TUNNELS = [
 			rxBytes: 42_881_221,
 			txBytes: 18_223_554,
 			lastHandshake: new Date(Date.now() - 90_000).toISOString(),
+			online: true,
+		},
+	},
+	{
+		id: 'Wireguard7',
+		interfaceName: 'opkgtun0',
+		description: 'Moscow SYS',
+		status: 'up',
+		connected: true,
+		mtu: 1420,
+		address: '10.20.1.2',
+		mask: '255.255.255.255',
+		uptime: 18_340,
+		peer: {
+			publicKey: mockPubkey(77),
+			endpoint: '185.10.68.42:51820',
+			via: 'PPPoE0',
+			rxBytes: 138_442_112,
+			txBytes: 54_887_003,
+			lastHandshake: new Date(Date.now() - 12_000).toISOString(),
 			online: true,
 		},
 	},
@@ -676,6 +696,76 @@ function buildAwgSnapshot() {
 		}),
 		external: MOCK_EXTERNAL_TUNNELS.map((t) => ({ ...t })),
 		system: MOCK_SYSTEM_TUNNELS.map((t) => ({ ...t, peer: t.peer ? { ...t.peer } : undefined })),
+	};
+}
+
+// Per-tunnel base latencies (ms), randomised once on startup so they stay in
+// different tiers across the session but drift slightly on every SSE tick.
+const AWG_BASE_LATENCY = (() => {
+	// Spread tunnels across latency tiers for a useful demo:
+	// good (<80ms): awg-demo-1, awg-demo-3
+	// warn (80-199ms): awg-demo-2 (recovering), awg-demo-4 (recovering)
+	// bad (≥200ms): awg-demo-6
+	// stopped/failed: awg-demo-5 → no latency
+	const ranges = {
+		'awg-demo-1': [15, 75],
+		'awg-demo-2': [80, 170],
+		'awg-demo-3': [20, 79],
+		'awg-demo-4': [80, 195],
+		'awg-demo-5': null,
+		'awg-demo-6': [190, 250],
+	};
+	const map = {};
+	for (const [id, range] of Object.entries(ranges)) {
+		map[id] = range ? range[0] + Math.floor(Math.random() * (range[1] - range[0] + 1)) : null;
+	}
+	return map;
+})();
+
+function buildConnectivityMatrixEvent() {
+	const nowIso = new Date().toISOString();
+	const selfTarget = { id: 'self', name: 'Self-check', host: '', url: '' };
+
+	const cells = [];
+	const tunnelEntries = [];
+
+	for (const t of MOCK_AWG_TUNNELS) {
+		const base = AWG_BASE_LATENCY[t.id] ?? null;
+		const isActive = t.status === 'running' || t.status === 'broken';
+		const pingFailed = t.pingCheck?.status === 'failed';
+
+		// Add small jitter (±12ms) so the value visibly fluctuates
+		const jitter = Math.floor(Math.random() * 25) - 12;
+		const latency = base !== null && isActive && !pingFailed
+			? Math.max(10, Math.min(300, base + jitter))
+			: null;
+
+		cells.push({
+			targetId: selfTarget.id,
+			tunnelId: t.id,
+			latencyMs: latency,
+			ok: isActive && !pingFailed,
+			activeForRestart: false,
+			isSelf: true,
+			ts: nowIso,
+		});
+
+		tunnelEntries.push({
+			id: t.id,
+			name: t.name,
+			ifaceName: t.interfaceName,
+			pingcheckTarget: '',
+			selfTarget: '',
+			selfMethod: 'http',
+			source: 'awg',
+		});
+	}
+
+	return {
+		targets: [selfTarget],
+		tunnels: tunnelEntries,
+		cells,
+		updatedAt: nowIso,
 	};
 }
 
@@ -2083,7 +2173,10 @@ const server = http.createServer(async (req, res) => {
 		for (const delay of currentSingboxDelays()) {
 			sendEvent('singbox:delay', delay);
 		}
+		// Emit initial connectivity matrix so tunnel cards show latency immediately.
+		sendEvent('monitoring:matrix-update', buildConnectivityMatrixEvent());
 
+		let connectivityTick = 0;
 		const interval = setInterval(() => {
 			for (const event of tickAwgTraffic()) {
 				sendEvent('tunnel:traffic', event);
@@ -2091,6 +2184,11 @@ const server = http.createServer(async (req, res) => {
 			sendEvent('singbox:traffic', buildSingboxTrafficEvent());
 			for (const delay of currentSingboxDelays()) {
 				sendEvent('singbox:delay', delay);
+			}
+			// Refresh connectivity every ~4.5s (every 3rd 1500ms tick).
+			connectivityTick++;
+			if (connectivityTick % 3 === 0) {
+				sendEvent('monitoring:matrix-update', buildConnectivityMatrixEvent());
 			}
 		}, 1500);
 
@@ -3006,6 +3104,90 @@ const server = http.createServer(async (req, res) => {
 			}
 			send(res, status, body);
 		});
+		return;
+	}
+
+	// ── System Tunnels — endpoints not in swagger ──────────────────────────────
+
+	if (req.method === 'GET' && path === '/system-tunnels/get') {
+		const name = url.searchParams.get('name');
+		const tunnel = MOCK_SYSTEM_TUNNELS.find((t) => t.id === name);
+		if (tunnel) {
+			send(res, 200, { success: true, data: { ...tunnel, peer: tunnel.peer ? { ...tunnel.peer } : undefined } });
+		} else {
+			send(res, 404, { success: false, error: 'system tunnel not found' });
+		}
+		return;
+	}
+
+	if (req.method === 'GET' && path === '/system-tunnels/test-connectivity') {
+		const name = url.searchParams.get('name');
+		const tunnel = MOCK_SYSTEM_TUNNELS.find((t) => t.id === name);
+		const up = tunnel?.status === 'up';
+		setTimeout(() => {
+			send(res, 200, {
+				success: true,
+				data: up
+					? { connected: true, latency: 38 + Math.floor(Math.random() * 20) }
+					: { connected: false, reason: 'interface down' },
+			});
+		}, 800);
+		return;
+	}
+
+	if (req.method === 'GET' && path === '/system-tunnels/test-ip') {
+		const name = url.searchParams.get('name');
+		const tunnel = MOCK_SYSTEM_TUNNELS.find((t) => t.id === name);
+		const up = tunnel?.status === 'up';
+		setTimeout(() => {
+			send(res, 200, {
+				success: true,
+				data: up
+					? { directIp: '185.10.68.1', vpnIp: tunnel?.address?.split('/')[0] ?? '10.20.1.2', endpointIp: tunnel?.peer?.endpoint?.split(':')[0] ?? '', ipChanged: true }
+					: { directIp: '85.174.10.1', vpnIp: '', endpointIp: '', ipChanged: false },
+			});
+		}, 1200);
+		return;
+	}
+
+	if (req.method === 'GET' && path === '/system-tunnels/test-speed') {
+		const name = url.searchParams.get('name');
+		const direction = url.searchParams.get('direction') ?? 'download';
+		const tunnel = MOCK_SYSTEM_TUNNELS.find((t) => t.id === name);
+		const up = tunnel?.status === 'up';
+
+		res.writeHead(200, {
+			'Content-Type': 'text/event-stream',
+			'Cache-Control': 'no-cache',
+			Connection: 'keep-alive',
+		});
+
+		if (!up) {
+			res.write(`event: error\ndata: "interface down"\n\n`);
+			res.end();
+			return;
+		}
+
+		const baseBw = direction === 'download' ? 12_000_000 : 4_000_000;
+		let sent = 0;
+		let second = 0;
+		const totalSeconds = 5;
+		const iv = setInterval(() => {
+			second++;
+			const bw = baseBw + Math.floor((Math.random() - 0.5) * 2_000_000);
+			const bytes = Math.floor(bw);
+			sent += bytes;
+			res.write(`event: interval\ndata: ${JSON.stringify({ second, bandwidth: bw })}\n\n`);
+			if (second >= totalSeconds) {
+				clearInterval(iv);
+				res.write(`event: result\ndata: ${JSON.stringify({ server: url.searchParams.get('server') ?? 'speed.demo.example', direction, bandwidth: baseBw, bytes: sent, duration: totalSeconds })}\n\n`);
+				res.end();
+			}
+		}, 1000);
+
+		const cleanup = () => clearInterval(iv);
+		req.on('close', cleanup);
+		req.on('error', cleanup);
 		return;
 	}
 
