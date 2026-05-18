@@ -453,7 +453,7 @@ export const SERVICE_PRESETS: ServicePreset[] = [
 			'turn.anyfirewall.com', 'turn.bistri.com', 'turn.num.viagenie.ca',
 			'freeturn.net', 'openrelayproject.org', 'turnix.io', 'fastturn.net',
 		],
-		notice: 'Каталог сервисов определения IP/DNS/WebRTC утечек — удобно направить одной правилом, чтобы выборочно маршрутизировать или блокировать проверки публичного адреса.',
+		notice: 'Каталог сервисов определения IP/DNS/WebRTC утечек — удобно направить одним правилом, чтобы выборочно маршрутизировать или блокировать проверки публичного адреса.',
 	},
 	{
 		id: 'torrents',
