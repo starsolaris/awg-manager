@@ -383,6 +383,37 @@ func TestWriteNetfilterHookContainsPidofGuard(t *testing.T) {
 	}
 }
 
+func TestWriteNetfilterHookPreloadsModules(t *testing.T) {
+	tmp := t.TempDir()
+	orig := netfilterHookPath
+	netfilterHookPath = filepath.Join(tmp, "50-awgm-tproxy.sh")
+	t.Cleanup(func() { netfilterHookPath = orig })
+
+	if err := writeNetfilterHook(); err != nil {
+		t.Fatalf("writeNetfilterHook: %v", err)
+	}
+	data, err := os.ReadFile(netfilterHookPath)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	body := string(data)
+
+	// The hook must contain the module preload loop with all known modules.
+	for _, mod := range []string{"xt_TPROXY", "xt_comment", "xt_mark", "xt_connmark", "xt_conntrack", "xt_pkttype"} {
+		if !strings.Contains(body, mod) {
+			t.Errorf("hook missing module preload entry for %q:\n%s", mod, body)
+		}
+	}
+	// insmod path must use /lib/modules/${KREL}
+	if !strings.Contains(body, `"/lib/modules/${KREL}/${mod}.ko"`) {
+		t.Errorf("hook missing /lib/modules/${KREL} insmod path:\n%s", body)
+	}
+	// best-effort: the loop must not fail hard — || true at end of insmod line.
+	if !strings.Contains(body, "insmod") || !strings.Contains(body, "|| true") {
+		t.Errorf("hook insmod block must use best-effort (|| true):\n%s", body)
+	}
+}
+
 func TestWriteNetfilterHookHasScrub(t *testing.T) {
 	tmp := t.TempDir()
 	orig := netfilterHookPath
@@ -748,5 +779,108 @@ func TestSplitLines(t *testing.T) {
 				t.Errorf("splitLines(%q)[%d]: got %q, want %q", c.in, i, got[i], c.want[i])
 			}
 		}
+	}
+}
+
+func TestIsInstalled_ChecksBothChains(t *testing.T) {
+	// Both chains present → true.
+	fe := &fakeExec{err: nil}
+	it := newFakeIPTables(fe)
+	if !it.IsInstalled(context.Background()) {
+		t.Error("expected true when both chain checks return nil")
+	}
+
+	// Mangle chain missing → false, nat chain not consulted.
+	fe2 := &fakeExec{err: errors.New("no such chain")}
+	fe2.calls = nil
+	it2 := newFakeIPTables(fe2)
+	if it2.IsInstalled(context.Background()) {
+		t.Error("expected false when mangle chain lookup fails")
+	}
+	foundMangle := false
+	for _, c := range fe2.calls {
+		if c.kind == "iptables" && len(c.args) >= 4 && c.args[0] == "-t" && c.args[1] == "mangle" && c.args[2] == "-nL" && c.args[3] == ChainName {
+			foundMangle = true
+		}
+	}
+	if !foundMangle {
+		t.Errorf("expected mangle chain check call, got: %+v", fe2.calls)
+	}
+
+	// Nat chain missing → false. Mangle must succeed and nat must fail;
+	// IsInstalled short-circuits on the first failure.
+	var natChecked bool
+	it3 := &IPTables{
+		runIPTables: func(_ context.Context, args ...string) error {
+			if len(args) >= 4 && args[0] == "-t" && args[1] == "nat" && args[2] == "-nL" && args[3] == RedirectChain {
+				natChecked = true
+				return errors.New("no such chain")
+			}
+			return nil // mangle and everything else OK
+		},
+	}
+	if it3.IsInstalled(context.Background()) {
+		t.Error("expected false when nat chain lookup fails")
+	}
+	if !natChecked {
+		t.Error("expected nat chain to be consulted")
+	}
+}
+
+func TestHasAnyInstalled_MangleOnly_ReturnsTrue(t *testing.T) {
+	it := &IPTables{
+		runIPTables: func(_ context.Context, args ...string) error {
+			if len(args) >= 4 &&
+				args[0] == "-t" &&
+				args[1] == "mangle" &&
+				args[2] == "-nL" &&
+				args[3] == ChainName {
+				return nil
+			}
+			if len(args) >= 4 &&
+				args[0] == "-t" &&
+				args[1] == "nat" &&
+				args[2] == "-nL" &&
+				args[3] == RedirectChain {
+				return errors.New("no such chain")
+			}
+			return errors.New("unexpected call")
+		},
+	}
+	if !it.HasAnyInstalled(context.Background()) {
+		t.Error("expected true when only mangle chain exists")
+	}
+}
+
+func TestHasAnyInstalled_NatOnly_ReturnsTrue(t *testing.T) {
+	it := &IPTables{
+		runIPTables: func(_ context.Context, args ...string) error {
+			if len(args) >= 4 &&
+				args[0] == "-t" &&
+				args[1] == "mangle" &&
+				args[2] == "-nL" &&
+				args[3] == ChainName {
+				return errors.New("no such chain")
+			}
+			if len(args) >= 4 &&
+				args[0] == "-t" &&
+				args[1] == "nat" &&
+				args[2] == "-nL" &&
+				args[3] == RedirectChain {
+				return nil
+			}
+			return errors.New("unexpected call")
+		},
+	}
+	if !it.HasAnyInstalled(context.Background()) {
+		t.Error("expected true when only nat chain exists")
+	}
+}
+
+func TestHasAnyInstalled_None_ReturnsFalse(t *testing.T) {
+	fe := &fakeExec{err: errors.New("no such chain")}
+	it := newFakeIPTables(fe)
+	if it.HasAnyInstalled(context.Background()) {
+		t.Error("expected false when no chains exist")
 	}
 }

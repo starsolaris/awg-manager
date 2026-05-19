@@ -211,6 +211,14 @@ type Deps struct {
 	// slice (UI shows just the "auto" option). Production wiring in
 	// cmd/awg-manager bridges this to ndmsQueries.Interfaces.ListWAN.
 	WANInterfaces WANInterfaceLister
+	// NetfilterPreflight is an optional override for the module-load /
+	// target-availability check that Enable and reconcileInstalled both
+	// call before every Install. When nil, prepareNetfilter runs the
+	// standard fatal xt_TPROXY preflight plus best-effort preload of the
+	// remaining router netfilter modules (xt_comment, xt_mark,
+	// xt_connmark, xt_conntrack, xt_pkttype via
+	// EnsureRouterNetfilterModules). Tests set this to avoid real syscalls.
+	NetfilterPreflight func(context.Context) error
 }
 
 // routerLoggerAdapter narrows *logger.Logger to the wanLogger
@@ -241,6 +249,14 @@ type ServiceImpl struct {
 	currentMark       string          // last-installed iptables mark; used by Reconcile to detect change
 	currentWANIPs     []string        // last-collected WAN IPs; used by Reconcile to detect change
 	currentLANBridges []LANBridgeMark // last-discovered LAN-bridge (name, NDMS mark) pairs; reconcile triggers re-install when this changes (e.g. user changed Keenetic hotspot policy or added a new bridge)
+
+	// netfilterStateKnown tracks whether we know for certain that the
+	// installed iptables rules match the current desired state. It starts
+	// false on every ServiceImpl construction (including after a daemon
+	// restart / upgrade where the old iptables chains may be stale). The
+	// first reconcileInstalled or Enable install forces a full re-install.
+	// After Install succeeds the flag is set to true until Disable resets it.
+	netfilterStateKnown bool
 
 	// inspectCache backs the route-inspector's rule_set match path. Lazy
 	// constructed on first Inspect call so dev-machine builds (no
@@ -347,6 +363,38 @@ func (s *ServiceImpl) persistConfigDirect(ctx context.Context, cfg *RouterConfig
 	if err := s.deps.Orch.Save(orchestrator.SlotRouter, data); err != nil {
 		return err
 	}
+	return nil
+}
+
+// prepareNetfilter runs the common netfilter preflight: xt_TPROXY module
+// load and TPROXY target availability check. It is shared by Enable and
+// reconcileInstalled so both paths run identical validation. Tests can
+// override it via deps.NetfilterPreflight to avoid real syscalls.
+func (s *ServiceImpl) prepareNetfilter(ctx context.Context) error {
+	if s.deps.NetfilterPreflight != nil {
+		return s.deps.NetfilterPreflight(ctx)
+	}
+
+	if err := EnsureTProxyModule(ctx); err != nil {
+		return err
+	}
+
+	if !IsTProxyTargetAvailable(ctx) {
+		return fmt.Errorf("iptables TPROXY target unavailable — kernel module loaded but iptables extension missing")
+	}
+
+	// Best-effort preload of all remaining router netfilter modules.
+	// TPROXY is already handled above as fatal; the rest are soft.
+	// This mirrors the full matcher/target set bisect-combo.sh warms up:
+	// xt_comment, xt_mark, xt_connmark, xt_conntrack, xt_pkttype.
+	if errs := EnsureRouterNetfilterModules(ctx); len(errs) > 0 {
+		for _, err := range errs {
+			if s.deps.Log != nil {
+				s.deps.Log.Warnf("router: ensure netfilter module: %v", err)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -473,19 +521,8 @@ func (s *ServiceImpl) Enable(ctx context.Context) error {
 		return fmt.Errorf("policy %q: %w", sr.PolicyName, ErrPolicyMissing)
 	}
 
-	if err := EnsureTProxyModule(ctx); err != nil {
+	if err := s.prepareNetfilter(ctx); err != nil {
 		return err
-	}
-	if !IsTProxyTargetAvailable(ctx) {
-		return fmt.Errorf("iptables TPROXY target unavailable — kernel module loaded but iptables extension missing")
-	}
-	// xt_comment isn't auto-loaded by NDMS on some OS 5.x EA builds
-	// (issue #130 — observed on NC-1812 / MT7988). Push the load
-	// ourselves so DNS-NOPOLICY rules survive iptables-restore COMMIT.
-	// Best-effort: a hard failure here would block Enable on systems
-	// where xt_comment is built into the kernel (no .ko on disk).
-	if err := EnsureCommentModule(ctx); err != nil {
-		s.deps.Log.Warn(fmt.Sprintf("router: ensure xt_comment: %v (continuing — iptables-restore will surface a concrete error if comment match really isn't available)", err))
 	}
 
 	sr.Enabled = true
@@ -584,6 +621,7 @@ func (s *ServiceImpl) Enable(ctx context.Context) error {
 	s.currentMark = mark
 	s.currentWANIPs = wanIPs
 	s.currentLANBridges = lanBridges
+	s.netfilterStateKnown = true
 
 	settings.SingboxRouter = sr
 	if err := s.deps.Settings.Save(settings); err != nil {
@@ -790,6 +828,7 @@ func (s *ServiceImpl) Disable(ctx context.Context) error {
 	s.currentMark = ""
 	s.currentWANIPs = nil
 	s.currentLANBridges = nil
+	s.netfilterStateKnown = false
 
 	if s.deps.Orch != nil {
 		// Move 20-router.json under disabled/ — sing-box's non-recursive
@@ -835,13 +874,14 @@ func (s *ServiceImpl) Reconcile(ctx context.Context) error {
 		return err
 	}
 	sr := settings.SingboxRouter
-	installed := s.deps.IPTables.IsInstalled(ctx)
+	installedComplete := s.deps.IPTables.IsInstalled(ctx)
+	installedAny := s.deps.IPTables.HasAnyInstalled(ctx)
 	switch {
-	case sr.Enabled && !installed:
+	case sr.Enabled && !installedComplete:
 		return s.Enable(ctx)
-	case !sr.Enabled && installed:
+	case !sr.Enabled && installedAny:
 		return s.Disable(ctx)
-	case sr.Enabled && installed:
+	case sr.Enabled && installedComplete:
 		return s.reconcileInstalled(ctx, sr)
 	}
 	return nil
@@ -866,7 +906,24 @@ func (s *ServiceImpl) reconcileInstalled(ctx context.Context, sr storage.Singbox
 	lanBridges, _ := DiscoverLANBridges(ctx)
 	lanBridgesChanged := !equalLANBridges(s.currentLANBridges, lanBridges)
 
-	if markChanged || wanIPsChanged || lanBridgesChanged {
+	// After a daemon restart or upgrade the old awg-manager process died
+	// with no chance to run Uninstall, so stale AWGM chains, ip rules
+	// and ip routes may remain from the old process. netfilterStateKnown
+	// starts false on every fresh ServiceImpl, so the very first
+	// reconcileInstalled after startup always forces a full re-install
+	// regardless of what IsInstalled reports.
+	forceInitialSync := !s.netfilterStateKnown
+	needsInstall := forceInitialSync || markChanged || wanIPsChanged || lanBridgesChanged
+
+	if needsInstall {
+		if forceInitialSync && s.deps.Log != nil {
+			s.deps.Log.Infof("router: first reconcile after daemon start — reinstalling netfilter rules")
+		}
+
+		if err := s.prepareNetfilter(ctx); err != nil {
+			return err
+		}
+
 		s.mu.Lock()
 		if err := s.deps.IPTables.Install(ctx, RestoreInputSpec{
 			PolicyMark: mark,
@@ -879,6 +936,7 @@ func (s *ServiceImpl) reconcileInstalled(ctx context.Context, sr storage.Singbox
 		s.currentMark = mark
 		s.currentWANIPs = wanIPs
 		s.currentLANBridges = lanBridges
+		s.netfilterStateKnown = true
 		s.mu.Unlock()
 	}
 

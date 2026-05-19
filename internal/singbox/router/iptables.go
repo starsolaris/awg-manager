@@ -160,19 +160,26 @@ func ensureKernelModule(ctx context.Context, name string) error {
 }
 
 var (
-	tproxyTargetOnce   sync.Once
+	tproxyTargetMu     sync.Mutex
 	tproxyTargetResult bool
 )
 
 func IsTProxyTargetAvailable(ctx context.Context) bool {
-	tproxyTargetOnce.Do(func() {
-		res, err := sysexec.Run(ctx, sysiptables.Binary, "-j", "TPROXY", "--help")
-		if err != nil || res == nil {
-			return
-		}
-		tproxyTargetResult = strings.Contains(res.Stdout+res.Stderr, "TPROXY")
-	})
-	return tproxyTargetResult
+	tproxyTargetMu.Lock()
+	if tproxyTargetResult {
+		tproxyTargetMu.Unlock()
+		return true
+	}
+	tproxyTargetMu.Unlock()
+
+	res, err := sysexec.Run(ctx, sysiptables.Binary, "-j", "TPROXY", "--help")
+	ok := err == nil && res != nil && strings.Contains(res.Stdout+res.Stderr, "TPROXY")
+	if ok {
+		tproxyTargetMu.Lock()
+		tproxyTargetResult = true
+		tproxyTargetMu.Unlock()
+	}
+	return ok
 }
 
 type RestoreInputSpec struct {
@@ -425,6 +432,13 @@ func writeNetfilterHook() error {
 case "$table" in mangle|nat) ;; *) exit 0 ;; esac
 [ -f %[1]q ] || exit 0
 pidof sing-box >/dev/null 2>&1 || exit 0
+# Best-effort kernel module preload. Absent .ko or built-in modules are
+# silently skipped — iptables-restore will surface the final verdict anyway.
+KREL="$(uname -r)"
+for mod in xt_TPROXY xt_comment xt_mark xt_connmark xt_conntrack xt_pkttype; do
+  grep -q "^${mod} " /proc/modules 2>/dev/null && continue
+  [ -f "/lib/modules/${KREL}/${mod}.ko" ] && insmod "/lib/modules/${KREL}/${mod}.ko" 2>/dev/null || true
+done
 mangle_ok=0; nat_ok=0
 /opt/sbin/iptables -w -t mangle -nL %[2]s >/dev/null 2>&1 && mangle_ok=1
 /opt/sbin/iptables -w -t nat    -nL %[6]s >/dev/null 2>&1 && nat_ok=1
@@ -551,6 +565,50 @@ func (it *IPTables) removeSourceHooksFromTable(ctx context.Context, table, chain
 	}
 }
 
+// EnsureRouterNetfilterModules best-effort preloads the remaining xt_*
+// modules that our iptables rules reference but that TPROXY preflight
+// does not cover: comment, mark, connmark, conntrack, pkttype.
+// ErrNetfilterComponentMissing (module absent or built-in) is silently
+// skipped. All other insmod errors are collected and returned without
+// blocking — a hard failure here would prevent a working install on
+// systems where the module is built-in or named differently. The caller
+// can log the warnings and proceed.
+func EnsureRouterNetfilterModules(ctx context.Context) []error {
+	var errs []error
+	for _, name := range []string{
+		"xt_comment",
+		"xt_mark",
+		"xt_connmark",
+		"xt_conntrack",
+		"xt_pkttype",
+	} {
+		err := ensureKernelModuleFn(ctx, name)
+		if err == nil || errors.Is(err, ErrNetfilterComponentMissing) {
+			continue
+		}
+		errs = append(errs, fmt.Errorf("%s: %w", name, err))
+	}
+	return errs
+}
+
+// HasAnyInstalled returns true if at least one of the AWGM chains exists
+// in the kernel. Used for the disabled-cleanup path: even a partial install
+// (e.g. mangle chain present but nat chain missing after a failed upgrade)
+// must trigger Uninstall so no stale remnants survive.
+func (it *IPTables) HasAnyInstalled(ctx context.Context) bool {
+	return it.runIPTables(ctx, "-t", "mangle", "-nL", ChainName) == nil ||
+		it.runIPTables(ctx, "-t", "nat", "-nL", RedirectChain) == nil
+}
+
+// IsInstalled returns true only when both AWGM chains exist. Used for the
+// enabled-reconcile path: if either chain is missing a full re-install is
+// needed to reach a known-good state.
 func (it *IPTables) IsInstalled(ctx context.Context) bool {
-	return it.runIPTables(ctx, "-t", "mangle", "-nL", ChainName) == nil
+	if it.runIPTables(ctx, "-t", "mangle", "-nL", ChainName) != nil {
+		return false
+	}
+	if it.runIPTables(ctx, "-t", "nat", "-nL", RedirectChain) != nil {
+		return false
+	}
+	return true
 }

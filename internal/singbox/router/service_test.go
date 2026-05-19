@@ -205,6 +205,9 @@ func TestReconcile_PolicyMarkChanged_Reinstalls(t *testing.T) {
 			IPTables:       ipt,
 			WANIPCollector: collector,
 			Singbox:        newTestSingbox(t),
+			// Tests call prepareNetfilter via reconcileInstalled when
+			// needsInstall is true — override to avoid real syscalls.
+			NetfilterPreflight: func(context.Context) error { return nil },
 		},
 		currentMark:   "0xffffaaa",
 		currentWANIPs: []string{"203.0.113.207/32"}, // same as collector — only mark differs
@@ -275,6 +278,7 @@ func TestReconcile_WANIPsChanged_Reinstalls(t *testing.T) {
 			IPTables:       ipt,
 			WANIPCollector: collector,
 			Singbox:        newTestSingbox(t),
+			NetfilterPreflight: func(context.Context) error { return nil },
 		},
 		currentMark:   "0xffffaaa",
 		currentWANIPs: []string{"198.51.100.1/32"}, // different
@@ -301,6 +305,9 @@ func TestReconcile_WANIPsSame_NoOp(t *testing.T) {
 	})
 	collector := &fakeWANIPCollector{ips: []string{"203.0.113.207/32"}}
 
+	// netfilterStateKnown=true models a daemon that has already completed
+	// its initial install cycle — mark and WAN IPs are identical to the
+	// stored values, so no re-install should be triggered.
 	svc := &ServiceImpl{
 		deps: Deps{
 			Log:            logger.New(),
@@ -308,9 +315,11 @@ func TestReconcile_WANIPsSame_NoOp(t *testing.T) {
 			IPTables:       ipt,
 			WANIPCollector: collector,
 			Singbox:        newTestSingbox(t),
+			NetfilterPreflight: func(context.Context) error { return nil },
 		},
-		currentMark:   "0xffffaaa",
-		currentWANIPs: []string{"203.0.113.207/32"}, // same
+		currentMark:         "0xffffaaa",
+		currentWANIPs:       []string{"203.0.113.207/32"}, // same
+		netfilterStateKnown: true,
 	}
 	if err := svc.reconcileInstalled(context.Background(), storage.SingboxRouterSettings{
 		Enabled:    true,
@@ -320,6 +329,112 @@ func TestReconcile_WANIPsSame_NoOp(t *testing.T) {
 	}
 	if restoreCalls != 0 {
 		t.Errorf("expected no restore (no-op), got %d Install calls", restoreCalls)
+	}
+}
+
+// TestReconcile_DisabledPartialInstall_CleansUp verifies that a disabled
+// router with partial netfilter state (e.g. only mangle chain survived a
+// failed upgrade while the nat chain was wiped) triggers Disable/Uninstall
+// so no stale remnants are left behind.
+func TestReconcile_DisabledPartialInstall_CleansUp(t *testing.T) {
+	// Stub IPTables so HasAnyInstalled=true (partial state present) but
+	// IsInstalled=false (incomplete — one chain missing).
+	uninstallCalled := false
+	ipt := &IPTables{
+		runIPTables: func(_ context.Context, args ...string) error {
+			// mangle chain lookup succeeds → HasAnyInstalled returns true.
+			// nat chain lookup fails → IsInstalled returns false.
+			if len(args) >= 4 && args[0] == "-t" && args[1] == "nat" && args[2] == "-nL" && args[3] == RedirectChain {
+				return errors.New("no such chain")
+			}
+			return nil
+		},
+		runIP: func(_ context.Context, args ...string) error { return nil },
+		cleanupHook: func() {
+			uninstallCalled = true
+		},
+	}
+
+	settingsStore := newTestSettingsStore(t, storage.SingboxRouterSettings{
+		Enabled:    false,
+		PolicyName: "Policy0",
+	})
+	policies := &fakeAccessPolicyProvider{mark: "0xffffaaa"}
+
+	svc := newTestService(t, Deps{
+		Settings:     settingsStore,
+		Policies:     policies,
+		IPTables:     ipt,
+		Singbox:      newTestSingbox(t),
+		WANIPCollector: &fakeWANIPCollector{ips: []string{"203.0.113.207/32"}},
+	})
+
+	if err := svc.Reconcile(context.Background()); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if !uninstallCalled {
+		t.Error("expected Uninstall/cleanup to be called for partial-state disabled router")
+	}
+
+	// Verify settings were persisted as disabled.
+	all, err := settingsStore.Load()
+	if err != nil {
+		t.Fatalf("Load after Reconcile: %v", err)
+	}
+	if all.SingboxRouter.Enabled {
+		t.Error("expected Enabled=false after disabled-cleanup path")
+	}
+}
+
+// TestReconcile_StateUnknown_ForcesInitialReinstall verifies that after a
+// daemon restart or upgrade, netfilterStateKnown is false on the fresh
+// ServiceImpl, so reconcileInstalled forces a full install even when mark
+// and WAN IPs have not changed. This is the core fix for the "stale chains
+// after upgrade" symptom.
+func TestReconcile_StateUnknown_ForcesInitialReinstall(t *testing.T) {
+	restoreCalls := 0
+	preflightCalls := 0
+	ipt := newStubIPTables(func(_ context.Context, _ string) error {
+		restoreCalls++
+		return nil
+	})
+	collector := &fakeWANIPCollector{ips: []string{"203.0.113.207/32"}}
+
+	// netfilterStateKnown=false on a freshly constructed ServiceImpl —
+	// exactly the state after `S99awg-manager restart` or an awg-manager
+	// binary upgrade.
+	svc := &ServiceImpl{
+		deps: Deps{
+			Log:            logger.New(),
+			Policies:       &fakeAccessPolicyProvider{mark: "0xffffaaa"},
+			IPTables:       ipt,
+			WANIPCollector: collector,
+			Singbox:        newTestSingbox(t),
+			NetfilterPreflight: func(context.Context) error {
+				preflightCalls++
+				return nil
+			},
+		},
+		currentMark:   "0xffffaaa",
+		currentWANIPs: []string{"203.0.113.207/32"},
+		// netfilterStateKnown intentionally left as zero value (false).
+	}
+
+	err := svc.reconcileInstalled(context.Background(), storage.SingboxRouterSettings{
+		Enabled:    true,
+		PolicyName: "Policy0",
+	})
+	if err != nil {
+		t.Fatalf("reconcileInstalled: %v", err)
+	}
+	if restoreCalls != 1 {
+		t.Errorf("expected 1 restore (forced initial reinstall), got %d", restoreCalls)
+	}
+	if preflightCalls != 1 {
+		t.Errorf("expected 1 preflight call, got %d", preflightCalls)
+	}
+	if !svc.netfilterStateKnown {
+		t.Error("expected netfilterStateKnown=true after successful install")
 	}
 }
 
