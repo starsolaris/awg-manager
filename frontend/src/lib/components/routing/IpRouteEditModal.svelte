@@ -2,6 +2,7 @@
 	import type { StaticRouteList, RoutingTunnel } from '$lib/types';
 	import { Modal, Button, Dropdown, type DropdownOption } from '$lib/components/ui';
 	import { ServiceIcon, IconPickerModal } from '$lib/components/dnsroutes';
+	import { formatIconUrlHint } from '$lib/utils/custom-icon';
 
 	interface Props {
 		open: boolean;
@@ -208,7 +209,7 @@
 			<div class="icon-meta">
 				{#if iconUrl}
 					<div class="icon-src">Кастомная иконка</div>
-					<div class="icon-hint" title={iconUrl}>{iconUrl}</div>
+					<div class="icon-hint" title={iconUrl}>{formatIconUrlHint(iconUrl)}</div>
 				{:else}
 					<div class="icon-src">Авто-определение по имени</div>
 					<div class="icon-hint">

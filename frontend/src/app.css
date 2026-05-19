@@ -88,6 +88,8 @@
   --color-bg-secondary: #16161e;
   --color-bg-tertiary: #24283b;
   --color-bg-hover: #292e42;
+  /** Icon tile on route cards — contrasts with --color-bg-secondary card surface */
+  --color-icon-tile-bg: var(--color-bg-tertiary);
 
   /* Text */
   --color-text-primary: #c0caf5;
@@ -203,6 +205,7 @@ html.light, [data-theme="light"] {
   --bg-secondary: var(--color-bg-secondary);
   --bg-tertiary: var(--color-bg-tertiary);
   --bg-hover: var(--color-bg-hover);
+  --icon-tile-bg: var(--color-icon-tile-bg);
   --text-primary: var(--color-text-primary);
   --text-secondary: var(--color-text-secondary);
   --text-muted: var(--color-text-muted);

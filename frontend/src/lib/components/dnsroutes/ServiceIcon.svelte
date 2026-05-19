@@ -1,7 +1,10 @@
 <script lang="ts">
 	import { getServiceIcon } from '$lib/utils/service-icons';
 	import { resolveIconSlug, isPresetIconResolvable } from '$lib/utils/resolve-icon-slug';
+	import { resolveIconTileBackground } from '$lib/utils/icon-tile-background';
+	import { iconImageSrc } from '$lib/utils/icon-url-meta';
 	import PresetIcon from '$lib/components/routing/singboxRouter/PresetIcon.svelte';
+	import IconTile from './IconTile.svelte';
 
 	interface Props {
 		name: string;
@@ -21,14 +24,15 @@
 	});
 
 	// Fallback chain:
-	//   1. explicit iconUrl (user-picked Qure / custom URL) → <img>
+	//   1. explicit iconUrl (user-picked Qure / custom URL) → tiled <img>
 	//   2. PresetIcon via iconSlug (same as SingBox router / HydraRoute presets)
 	//   3. keyword inline SVG (service-icons.ts)
 	//   4. globe default
 	let slug = $derived(resolveIconSlug(name, iconSlug));
 	let usePreset = $derived(!iconUrl && !!slug && isPresetIconResolvable(slug));
 
-	let renderUrl = $derived(iconUrl && !imgFailed ? iconUrl : null);
+	let renderSrc = $derived(iconUrl && !imgFailed ? iconImageSrc(iconUrl) : null);
+	let tileBg = $derived(iconUrl ? resolveIconTileBackground(name, iconUrl) : '');
 
 	let inlineIcon = $derived(getServiceIcon(name));
 	let innerSize = $derived.by(() => {
@@ -37,20 +41,14 @@
 	});
 </script>
 
-{#if renderUrl}
-	<div
-		class="service-icon img-wrapper"
-		style="width: {size}px; height: {size}px;"
-	>
-		<img
-			src={renderUrl}
-			alt={name}
-			width={size}
-			height={size}
-			loading="lazy"
-			onerror={() => (imgFailed = true)}
-		/>
-	</div>
+{#if renderSrc}
+	<IconTile
+		src={renderSrc}
+		background={tileBg}
+		{size}
+		alt={name}
+		onerror={() => (imgFailed = true)}
+	/>
 {:else if usePreset && slug}
 	<PresetIcon {slug} {size} />
 {:else}
@@ -88,15 +86,6 @@
 		justify-content: center;
 		border-radius: 8px;
 		flex-shrink: 0;
-	}
-	.img-wrapper {
-		background: transparent;
-		overflow: hidden;
-	}
-	.img-wrapper img {
-		width: 100%;
-		height: 100%;
-		object-fit: contain;
 	}
 	.service-icon .asset {
 		object-fit: contain;

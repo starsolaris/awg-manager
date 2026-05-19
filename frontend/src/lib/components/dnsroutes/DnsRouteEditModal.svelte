@@ -5,6 +5,7 @@
 	import DnsRouteDomainEditor from './DnsRouteDomainEditor.svelte';
 	import ServiceIcon from './ServiceIcon.svelte';
 	import IconPickerModal from './IconPickerModal.svelte';
+	import { formatIconUrlHint } from '$lib/utils/custom-icon';
 
 	interface Props {
 		open: boolean;
@@ -311,7 +312,7 @@
 			<div class="icon-meta">
 				{#if iconUrl}
 					<div class="icon-src">Кастомная иконка</div>
-					<div class="icon-hint" title={iconUrl}>{iconUrl}</div>
+					<div class="icon-hint" title={iconUrl}>{formatIconUrlHint(iconUrl)}</div>
 				{:else}
 					<div class="icon-src">Авто-определение по имени</div>
 					<div class="icon-hint">
