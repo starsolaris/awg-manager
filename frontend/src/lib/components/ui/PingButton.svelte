@@ -40,9 +40,9 @@
 	}: Props = $props();
 
 	function awgTier(ms: number): string {
-		if (ms < 80) return 'good';
-		if (ms < 130) return 'warn';
-		if (ms < 200) return 'high';
+		if (ms < 100) return 'good';
+		if (ms < 150) return 'warn';
+		if (ms < 220) return 'high';
 		return 'bad';
 	}
 
