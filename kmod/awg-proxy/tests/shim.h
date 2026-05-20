@@ -19,7 +19,15 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef __APPLE__
+#include <libkern/OSByteOrder.h>
+#define htole32(x) OSSwapHostToLittleInt32(x)
+#define le32toh(x) OSSwapLittleToHostInt32(x)
+#define htobe32(x) OSSwapHostToBigInt32(x)
+#define be32toh(x) OSSwapBigToHostInt32(x)
+#else
 #include <endian.h>
+#endif
 
 /* ---- Linux integer aliases ---- */
 typedef uint8_t  u8;
