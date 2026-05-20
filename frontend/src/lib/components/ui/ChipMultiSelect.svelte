@@ -196,7 +196,7 @@
         {#each orphanValues as v (v)}
             <span class="chip chip-orphan" title="Набор не найден в текущем конфиге">
                 <span class="chip-label">{v}</span>
-                <span class="chip-orphan-badge">орфан</span>
+                <span class="chip-orphan-badge">сирота / orphaned</span>
                 <button
                     type="button"
                     class="chip-remove"

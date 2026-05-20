@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { parseInlineRuleList } from '$lib/utils/singboxInlineRules';
+import {
+	analyzeInlineRuleListLossy,
+	parseInlineRuleList,
+	stringifyInlineRuleList,
+} from '$lib/utils/singboxInlineRules';
 
 describe('parseInlineRuleList', () => {
 	// ── domains ────────────────────────────────────────────────
@@ -150,9 +154,9 @@ describe('parseInlineRuleList', () => {
 	});
 
 	// ── domain:/suffix:/domain_suffix: prefixes ───────────────
-	it('handles domain: prefix with leading dot in domain_suffix', () => {
+	it('handles domain: prefix as domain-only (no domain_suffix)', () => {
 		const { rules } = parseInlineRuleList('domain:example.com');
-		expect(rules).toEqual([{ domain: ['example.com'], domain_suffix: ['.example.com'] }]);
+		expect(rules).toEqual([{ domain: ['example.com'] }]);
 	});
 
 	it('handles domain_suffix with leading dot', () => {
@@ -269,5 +273,73 @@ describe('port_range (not yet supported)', () => {
 		expect(warnings).toHaveLength(1);
 		expect(warnings[0]).toContain('port_range');
 		expect(warnings[0]).toContain('не поддерживается');
+	});
+});
+
+describe('stringifyInlineRuleList', () => {
+	it('serializes domain-only JSON as domain: line', () => {
+		const text = stringifyInlineRuleList([{ domain: ['example.com'] }]);
+		expect(text).toBe('domain:example.com');
+		expect(parseInlineRuleList(text).rules).toEqual([{ domain: ['example.com'] }]);
+	});
+
+	it('uses bare hostname when JSON has matching domain_suffix for that host', () => {
+		const rules = [{ domain: ['x.com'], domain_suffix: ['.x.com'] }];
+		const text = stringifyInlineRuleList(rules);
+		expect(text).toBe('x.com');
+		const p = parseInlineRuleList(text);
+		expect(p.rules).toEqual([{ domain: ['x.com'], domain_suffix: ['.x.com'] }]);
+	});
+
+	it('round-trips typical list input through parse → stringify → parse', () => {
+		const input = ['openai.com', '*.perplexity.ai', '1.1.1.1', 'keyword:youtube'].join('\n');
+		const p1 = parseInlineRuleList(input);
+		expect(p1.errors).toHaveLength(0);
+		const text = stringifyInlineRuleList(p1.rules);
+		const p2 = parseInlineRuleList(text);
+		expect(p2.errors).toHaveLength(0);
+		expect(p2.rules).toEqual(p1.rules);
+	});
+
+	it('keeps broader domain_suffix alongside domain (domain: when no matching suffix)', () => {
+		const rules = [{ domain: ['www.example.com'], domain_suffix: ['.example.com'] }];
+		const text = stringifyInlineRuleList(rules);
+		expect(text).toBe(['domain:www.example.com', '.example.com'].join('\n'));
+		const p = parseInlineRuleList(text);
+		expect(p.errors).toHaveLength(0);
+		expect(p.rules[0].domain).toEqual(['www.example.com']);
+		const suf = p.rules[0].domain_suffix as string[];
+		expect(suf).toContain('.example.com');
+		expect(suf).not.toContain('.www.example.com');
+	});
+
+	it('emits suffix-only rules as dot-prefixed lines', () => {
+		const text = stringifyInlineRuleList([{ domain_suffix: ['.example.com'] }]);
+		expect(text).toBe('.example.com');
+	});
+
+	it('emits bare IP and CIDR lines', () => {
+		const text = stringifyInlineRuleList([{ ip_cidr: ['1.1.1.1', '8.8.8.0/24'] }]);
+		expect(text).toBe(['1.1.1.1', '8.8.8.0/24'].join('\n'));
+		expect(parseInlineRuleList(text).rules).toEqual([{ ip_cidr: ['1.1.1.1', '8.8.8.0/24'] }]);
+	});
+});
+
+describe('analyzeInlineRuleListLossy', () => {
+	it('does not flag domain-only rules as lossy', () => {
+		const r = analyzeInlineRuleListLossy([{ domain: ['example.com'] }]);
+		expect(r.lossy).toBe(false);
+	});
+
+	it('flags mixed domain and ip matchers in one rule object', () => {
+		const r = analyzeInlineRuleListLossy([{ domain: ['a.com'], ip_cidr: ['1.1.1.1'] }]);
+		expect(r.lossy).toBe(true);
+		expect(r.issues.some((i) => i.includes('mixed supported keys'))).toBe(true);
+	});
+
+	it('flags unsupported JSON keys', () => {
+		const r = analyzeInlineRuleListLossy([{ domain: ['z.com'], inverted: [true] } as Record<string, unknown>]);
+		expect(r.lossy).toBe(true);
+		expect(r.issues.some((i) => i.includes('inverted'))).toBe(true);
 	});
 });

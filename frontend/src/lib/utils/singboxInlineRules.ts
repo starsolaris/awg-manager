@@ -19,16 +19,36 @@ function asNumberArray(v: unknown): number[] {
 	return v.filter((x): x is number => typeof x === 'number');
 }
 
+function normSuffixDotForm(s: string): string {
+	const t = s.trim().replace(/^\*\./, '').replace(/^\./, '');
+	return '.' + t;
+}
+
+/**
+ * JSON rules → smart-list text.
+ * - domain + matching `.host` suffix in the same rule → bare hostname (list adds both domain and suffix on parse).
+ * - domain without matching suffix → `domain:host` (exact host only).
+ * - suffix without paired domain → `.suffix` line.
+ */
 export function stringifyInlineRuleList(rules: Record<string, unknown>[] | undefined): string {
 	if (!Array.isArray(rules) || rules.length === 0) return '';
 	const lines: string[] = [];
 
 	for (const r of rules) {
 		const domains = asStringArray(r['domain']);
-		for (const d of domains) lines.push(`domain:${d}`);
+		const suffixes = asStringArray(r['domain_suffix']).map(normSuffixDotForm);
+		const suffixSet = new Set(suffixes);
+		const implied = new Set(
+			domains.map((d) => '.' + d.replace(/^\*\./, '').replace(/^\./, '')),
+		);
+		const extraSuffixes = suffixes.filter((s) => !implied.has(s));
 
-		const suffixes = asStringArray(r['domain_suffix']);
-		for (const s of suffixes) lines.push(`domain_suffix:${s}`);
+		for (const d of domains) {
+			const dot = '.' + d.replace(/^\*\./, '').replace(/^\./, '');
+			if (suffixSet.has(dot)) lines.push(d);
+			else lines.push(`domain:${d}`);
+		}
+		for (const s of extraSuffixes) lines.push(s);
 
 		const keywords = asStringArray(r['domain_keyword']);
 		for (const k of keywords) lines.push(`keyword:${k}`);
@@ -37,9 +57,7 @@ export function stringifyInlineRuleList(rules: Record<string, unknown>[] | undef
 		for (const rx of regexes) lines.push(`regex:${rx}`);
 
 		const ipCidrs = asStringArray(r['ip_cidr']);
-		for (const ip of ipCidrs) {
-			lines.push(ip.includes('/') ? `cidr:${ip}` : `ip:${ip}`);
-		}
+		for (const ip of ipCidrs) lines.push(ip);
 
 		const srcIpCidrs = asStringArray(r['source_ip_cidr']);
 		for (const ip of srcIpCidrs) lines.push(`src_ip:${ip}`);
@@ -127,23 +145,6 @@ export function analyzeInlineRuleListLossy(rules: Record<string, unknown>[] | un
 			issues.add(
 				`mixed supported keys in one rule are not round-trip safe: ${supportedKeysInRule.join(', ')}`,
 			);
-		}
-
-		// Current list parser expands `domain:` to domain + domain_suffix.
-		// For safe round-trip each exact domain must already have matching
-		// ".domain" suffix in the same rule object.
-		if (Array.isArray(rule.domain) && rule.domain.length > 0) {
-			const suffixes = new Set(
-				Array.isArray(rule.domain_suffix)
-					? rule.domain_suffix.filter((v): v is string => typeof v === 'string')
-					: [],
-			);
-			for (const d of rule.domain) {
-				if (typeof d !== 'string') continue;
-				if (!suffixes.has(`.${d}`)) {
-					issues.add(`domain exact-only rule may widen in list mode: ${d}`);
-				}
-			}
 		}
 	}
 
@@ -318,8 +319,8 @@ export function parseInlineRuleList(input: string): InlineRuleParseResult {
 				case 'domain':
 					if (!real(val)) { lg.err(`${rawKey} требует значение после двоеточия`); continue; }
 					if (isValidDomain(val)) {
+						// Явный `domain:` — только sing-box domain (точное совпадение хоста), без domain_suffix
 						domainGroup.add(val);
-						domainSuffixGroup.add('.' + val);
 					} else {
 						lg.err(`Некорректный домен для domain: ${val}`);
 					}

@@ -28,9 +28,10 @@
 		{ value: '168h', label: '168h (неделя)' },
 	];
 
-	const DEFAULT_RULES_LIST = `# Домены
+	const RULES_LIST_PLACEHOLDER = `# Домены
 openai.com
 chatgpt.com
+domain:claude.ai
 *.perplexity.ai
 https://gemini.google.com/app
 
@@ -39,7 +40,8 @@ https://gemini.google.com/app
 8.8.8.0/24
 
 # Дополнительно
-keyword:youtube`;
+keyword:youtube
+geosite:xai`;
 
 	// ── derived ────────────────────────────────────────────────
 	const downloadDetourOptions = $derived<DropdownOption[]>([
@@ -140,7 +142,7 @@ keyword:youtube`;
 	// For inline rule sets: 'list' = smart-line-by-line, 'json' = raw JSON array
 	let inlineMode: 'list' | 'json' = $state('list');
 
-	let rulesList = $state(DEFAULT_RULES_LIST);
+	let rulesList = $state('');
 
 	let type: 'remote' | 'local' | 'inline' = $state('remote');
 	let format: 'binary' | 'source' = $state('binary');
@@ -153,6 +155,73 @@ keyword:youtube`;
 
 	let busy = $state(false);
 	let error = $state('');
+	let inlineModeBusy = $state(false);
+	/** Geo/list-parse or JSON→list serializer messages shown after switching Список ↔ JSON */
+	let inlineTabConvertWarnings = $state<string[]>([]);
+
+	async function switchInlineMode(next: 'list' | 'json'): Promise<void> {
+		if (next === inlineMode || inlineModeBusy) return;
+		error = '';
+		inlineTabConvertWarnings = [];
+		if (type !== 'inline') {
+			inlineMode = next;
+			return;
+		}
+		inlineModeBusy = true;
+		try {
+			if (next === 'json' && inlineMode === 'list') {
+				const { text: expanded, warnings: geoWarn } = await expandGeoLinesInInput(
+					rulesList,
+					async (kind, tag) => {
+						const res = await api.expandGeoTag(kind, tag);
+						return res.lines;
+					},
+				);
+				const parsed = parseInlineRuleList(expanded);
+				if (parsed.errors.length > 0) {
+					error = parsed.errors.join('\n');
+					return;
+				}
+				rulesJson =
+					parsed.rules.length === 0 ? '[]' : JSON.stringify(parsed.rules, null, 2);
+				inlineTabConvertWarnings = [...geoWarn, ...parsed.warnings];
+				inlineMode = 'json';
+				return;
+			}
+			if (next === 'list' && inlineMode === 'json') {
+				const trimmed = rulesJson.trim();
+				if (trimmed === '') {
+					rulesList = '';
+					inlineMode = 'list';
+					return;
+				}
+				let arr: unknown;
+				try {
+					arr = JSON.parse(rulesJson);
+				} catch (e) {
+					error = `Некорректный JSON: ${(e as Error).message}`;
+					return;
+				}
+				if (!Array.isArray(arr)) {
+					error = 'Правила должны быть JSON-массивом';
+					return;
+				}
+				const typed = arr as Record<string, unknown>[];
+				rulesList = stringifyInlineRuleList(typed);
+				const lossy = analyzeInlineRuleListLossy(typed);
+				inlineTabConvertWarnings = lossy.issues;
+				inlineMode = 'list';
+				return;
+			}
+			inlineMode = next;
+		} finally {
+			inlineModeBusy = false;
+		}
+	}
+
+	$effect(() => {
+		if (type !== 'inline') inlineTabConvertWarnings = [];
+	});
 
 	const inlineLossyAnalysis = $derived.by(() => {
 		if (!ruleSet || ruleSet.type !== 'inline') return { lossy: false, issues: [] as string[] };
@@ -203,9 +272,10 @@ keyword:youtube`;
 			ruleSet?.type === 'inline' && ruleSet?.rules?.length && nextLossyAnalysis.lossy
 				? 'json'
 				: 'list';
-		const nextRulesList = nextType === 'inline'
-			? (ruleSet?.rules?.length ? stringifyInlineRuleList(ruleSet.rules) : '')
-			: DEFAULT_RULES_LIST;
+		const nextRulesList =
+			nextType === 'inline' && ruleSet?.rules?.length
+				? stringifyInlineRuleList(ruleSet.rules)
+				: '';
 
 		type = nextType;
 		format = nextFormat;
@@ -231,6 +301,7 @@ keyword:youtube`;
 
 		error = '';
 		busy = false;
+		inlineTabConvertWarnings = [];
 	});
 
 	const isDirty = $derived.by(() => {
@@ -331,11 +402,13 @@ keyword:youtube`;
 
 <Modal open onclose={onClose} title={ruleSet ? 'Редактировать rule set' : 'Новый rule set'} hasUnsavedChanges={() => isDirty}>
 	<div class="form">
-		<div class="section-label">Тип</div>
-		<div class="segment">
-			<button class:active={type === 'remote'} onclick={() => (type = 'remote')} type="button">Remote</button>
-			<button class:active={type === 'local'} onclick={() => (type = 'local')} type="button">Local</button>
-			<button class:active={type === 'inline'} onclick={() => (type = 'inline')} type="button">Inline</button>
+		<div class="field">
+			<div class="lbl">Тип</div>
+			<div class="segment">
+				<button class:active={type === 'remote'} onclick={() => (type = 'remote')} type="button">Remote</button>
+				<button class:active={type === 'local'} onclick={() => (type = 'local')} type="button">Local</button>
+				<button class:active={type === 'inline'} onclick={() => (type = 'inline')} type="button">Inline</button>
+			</div>
 		</div>
 
 		<label class="field">
@@ -382,13 +455,33 @@ keyword:youtube`;
 			<div class="field">
 				<div class="lbl">Формат ввода</div>
 				<div class="segment">
-					<button class:active={inlineMode === 'list'} onclick={() => (inlineMode = 'list')} type="button">
+					<button
+						class:active={inlineMode === 'list'}
+						disabled={inlineModeBusy}
+						onclick={() => void switchInlineMode('list')}
+						type="button"
+					>
 						Список
 					</button>
-					<button class:active={inlineMode === 'json'} onclick={() => (inlineMode = 'json')} type="button">
+					<button
+						class:active={inlineMode === 'json'}
+						disabled={inlineModeBusy}
+						onclick={() => void switchInlineMode('json')}
+						type="button"
+					>
 						JSON
 					</button>
 				</div>
+				{#if inlineTabConvertWarnings.length > 0}
+					<div class="parse-messages parse-messages-warning">
+						<div class="parse-messages-title">При переключении режима</div>
+						<ul>
+							{#each inlineTabConvertWarnings as msg}
+								<li>{msg}</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
 			</div>
 
 			{#if inlineMode === 'list'}
@@ -429,6 +522,7 @@ keyword:youtube`;
 							class="rules-json rules-list-textarea"
 							bind:this={rulesListTextarea}
 							bind:value={rulesList}
+							placeholder={RULES_LIST_PLACEHOLDER}
 							rows="12"
 							spellcheck="false"
 							wrap="off"
@@ -452,9 +546,19 @@ keyword:youtube`;
 					<div class="inline-help-body">
 						<div>
 							<span class="help-label">Поддерживается:</span>
-							домены, URL, wildcard <code>*.example.com</code>, IP/CIDR,
+							голый домен (даёт и <code>domain</code>, и <code>domain_suffix</code>),
+							<code>domain:хост</code> — только точное совпадение хоста в <code>domain</code>,
+							URL, wildcard <code>*.example.com</code>, суффикс <code>.example.com</code>,
+							<code>domain_suffix:</code> / <code>suffix:</code>, IP/CIDR,
 							<code>geosite:TAG</code>, <code>geoip:TAG</code> (разворачиваются из гео-файлов),
 							<code>keyword:</code>, <code>regex:</code>.
+						</div>
+						<div>
+							<span class="help-label">JSON → список:</span>
+							если в JSON есть и <code>domain</code>, и парный <code>domain_suffix</code>
+							(<code>.</code> + тот же хост) — в текст попадёт голый домен; только
+							<code>domain</code> → <code>domain:хост</code>; только суффикс → строка
+							<code>.example.com</code>.
 						</div>
 						<div>
 							<span class="help-label">Расширенные matchers:</span>
@@ -523,7 +627,7 @@ keyword:youtube`;
 
 		<div class="actions">
 			<button class="btn btn-secondary" onclick={onClose} type="button">Отмена</button>
-			<button class="btn btn-primary" onclick={save} disabled={busy} type="button">Сохранить</button>
+			<button class="btn btn-primary" onclick={save} disabled={busy || inlineModeBusy} type="button">Сохранить</button>
 		</div>
 	</div>
 </Modal>
@@ -533,12 +637,6 @@ keyword:youtube`;
 		display: grid;
 		gap: 0.6rem;
 		min-width: 0;
-	}
-	.section-label {
-		font-size: 0.7rem;
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-		color: var(--muted-text);
 	}
 	.field {
 		display: grid;
@@ -763,6 +861,9 @@ keyword:youtube`;
 		resize: none;
 		white-space: pre;
 		box-sizing: border-box;
+	}
+	.rules-list-textarea::placeholder {
+		color: var(--color-text-muted);
 	}
 
 </style>
