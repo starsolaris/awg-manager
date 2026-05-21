@@ -67,6 +67,12 @@ type SingboxRouterSettingsData struct {
 	// and wanAutoDetect=true); both examples are intentionally consistent.
 	WANAutoDetect bool   `json:"wanAutoDetect" example:"false"`
 	WANInterface  string `json:"wanInterface,omitempty" example:"ppp0"`
+	// BypassPresets lists active named port-bypass presets.
+	// Valid values: "l2tp", "ntp", "netbios-smb".
+	BypassPresets    []string `json:"bypassPresets,omitempty" example:"l2tp"`
+	// BypassExtraPorts is a user-defined comma-separated list of extra
+	// port exclusions in "PORT UDP|TCP" format (e.g. "51820 UDP, 1194 TCP").
+	BypassExtraPorts string   `json:"bypassExtraPorts,omitempty" example:"51820 UDP"`
 }
 
 // SingboxRouterSettingsResponse is the envelope for GET /singbox/router/settings.

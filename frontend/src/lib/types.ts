@@ -1235,6 +1235,8 @@ export interface SingboxRouterSettings {
 	// All other combinations are invalid; backend validator rejects them.
 	wanAutoDetect: boolean;
 	wanInterface?: string; // kernel system-name (e.g. "ppp0"); empty when wanAutoDetect=true
+	bypassPresets?: string[];
+	bypassExtraPorts?: string;
 }
 
 // WAN interface for the sing-box router WAN-binding picker. `name` is

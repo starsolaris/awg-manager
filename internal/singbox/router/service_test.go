@@ -674,6 +674,55 @@ func TestAddRuleSet_InlineWritesLocalBinaryToPendingAndListsInline(t *testing.T)
 	}
 }
 
+// ---------------------------------------------------------------------------
+// ValidateSingboxRouterSettings — bypass presets and extra ports
+// ---------------------------------------------------------------------------
+
+func TestValidateSingboxRouterSettings_ValidPresets(t *testing.T) {
+	sr := storage.SingboxRouterSettings{
+		WANAutoDetect: true,
+		BypassPresets: []string{"l2tp", "ntp"},
+	}
+	if err := ValidateSingboxRouterSettings(sr); err != nil {
+		t.Fatalf("unexpected error for valid presets: %v", err)
+	}
+}
+
+func TestValidateSingboxRouterSettings_UnknownPreset(t *testing.T) {
+	sr := storage.SingboxRouterSettings{
+		WANAutoDetect: true,
+		BypassPresets: []string{"l2tp", "nonexistent"},
+	}
+	err := ValidateSingboxRouterSettings(sr)
+	if err == nil {
+		t.Fatal("expected error for unknown preset")
+	}
+	if !strings.Contains(err.Error(), "nonexistent") {
+		t.Errorf("error should mention preset name, got: %v", err)
+	}
+}
+
+func TestValidateSingboxRouterSettings_InvalidExtraPorts(t *testing.T) {
+	sr := storage.SingboxRouterSettings{
+		WANAutoDetect:    true,
+		BypassExtraPorts: "51820", // missing protocol
+	}
+	err := ValidateSingboxRouterSettings(sr)
+	if err == nil {
+		t.Fatal("expected error for malformed ExtraPorts")
+	}
+}
+
+func TestValidateSingboxRouterSettings_ValidExtraPorts(t *testing.T) {
+	sr := storage.SingboxRouterSettings{
+		WANAutoDetect:    true,
+		BypassExtraPorts: "51820 UDP, 1194 TCP",
+	}
+	if err := ValidateSingboxRouterSettings(sr); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestListRules_RewritesSRSCompanionRefToInlineTag(t *testing.T) {
 	svc, _ := newOrchedTestService(t)
 	svc.deps.Singbox.(*fakeSingbox).binary = "/opt/bin/sing-box"
@@ -795,5 +844,78 @@ func TestDeleteRuleSet_InlineRemovesSRSCompanionAndFiles(t *testing.T) {
 		if _, err := os.Stat(p); !os.IsNotExist(err) {
 			t.Fatalf("expected %s removed, stat err=%v", p, err)
 		}
+	}
+}
+
+func TestReconcile_BypassPresetsChanged_Reinstalls(t *testing.T) {
+	restoreCalls := 0
+	ipt := newStubIPTables(func(_ context.Context, _ string) error {
+		restoreCalls++
+		return nil
+	})
+	collector := &fakeWANIPCollector{ips: []string{"203.0.113.207/32"}}
+
+	svc := &ServiceImpl{
+		deps: Deps{
+			Log:                logger.New(),
+			Policies:           &fakeAccessPolicyProvider{mark: "0xffffaaa"},
+			IPTables:           ipt,
+			WANIPCollector:     collector,
+			Singbox:            newTestSingbox(t),
+			NetfilterPreflight: func(context.Context) error { return nil },
+		},
+		currentMark:          "0xffffaaa",
+		currentWANIPs:        []string{"203.0.113.207/32"},
+		currentBypassPresets: nil, // was empty, now l2tp
+		netfilterStateKnown:  true,
+	}
+	if err := svc.reconcileInstalled(context.Background(), storage.SingboxRouterSettings{
+		Enabled:       true,
+		PolicyName:    "Policy0",
+		BypassPresets: []string{"l2tp"}, // changed
+	}); err != nil {
+		t.Fatalf("reconcileInstalled err: %v", err)
+	}
+	if restoreCalls != 1 {
+		t.Errorf("expected 1 Install due to bypass preset change, got %d", restoreCalls)
+	}
+	if !slices.Equal(svc.currentBypassPresets, []string{"l2tp"}) {
+		t.Errorf("currentBypassPresets not updated: %v", svc.currentBypassPresets)
+	}
+}
+
+func TestReconcile_BypassPresetsSame_NoOp(t *testing.T) {
+	restoreCalls := 0
+	ipt := newStubIPTables(func(_ context.Context, _ string) error {
+		restoreCalls++
+		return nil
+	})
+	collector := &fakeWANIPCollector{ips: []string{"203.0.113.207/32"}}
+
+	svc := &ServiceImpl{
+		deps: Deps{
+			Log:                logger.New(),
+			Policies:           &fakeAccessPolicyProvider{mark: "0xffffaaa"},
+			IPTables:           ipt,
+			WANIPCollector:     collector,
+			Singbox:            newTestSingbox(t),
+			NetfilterPreflight: func(context.Context) error { return nil },
+		},
+		currentMark:             "0xffffaaa",
+		currentWANIPs:           []string{"203.0.113.207/32"},
+		currentBypassPresets:    []string{"l2tp"},      // same
+		currentBypassExtraPorts: "51820 UDP",           // same
+		netfilterStateKnown:     true,
+	}
+	if err := svc.reconcileInstalled(context.Background(), storage.SingboxRouterSettings{
+		Enabled:          true,
+		PolicyName:       "Policy0",
+		BypassPresets:    []string{"l2tp"},
+		BypassExtraPorts: "51820 UDP",
+	}); err != nil {
+		t.Fatalf("reconcileInstalled err: %v", err)
+	}
+	if restoreCalls != 0 {
+		t.Errorf("expected no Install (no-op when bypass same), got %d calls", restoreCalls)
 	}
 }

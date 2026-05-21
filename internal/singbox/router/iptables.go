@@ -212,6 +212,17 @@ type RestoreInputSpec struct {
 	// (no bridges with usable _NDM_HOTSPOT_DNSREDIR entries on this
 	// router).
 	LANBridges []LANBridgeDNSRedir
+
+	// BypassUDPPorts lists UDP destination ports that should RETURN from
+	// AWGM-TPROXY before the catch-all TPROXY rule — they bypass sing-box
+	// entirely and route as if no policy were active.
+	BypassUDPPorts []int
+
+	// BypassTCPPorts lists TCP destination ports that should RETURN from
+	// AWGM-REDIRECT before the catch-all REDIRECT rule.
+	// Note: port 79 (NDMS admin) is always excluded by a hardcoded rule;
+	// including 79 here produces a harmless duplicate RETURN rule.
+	BypassTCPPorts []int
 }
 
 var bypassCIDRs = []string{
@@ -259,6 +270,12 @@ func buildRestoreInput(spec RestoreInputSpec) string {
 	b.WriteString("*mangle\n")
 	fmt.Fprintf(&b, ":%s - [0:0]\n", ChainName)
 
+	// Bypass ports: RETURN first — before DNS intercept and catch-all so that
+	// any explicitly excluded port skips sing-box entirely (including port 53).
+	for _, port := range spec.BypassUDPPorts {
+		fmt.Fprintf(&b, "-A %s -p udp --dport %d -j RETURN\n", ChainName, port)
+	}
+
 	// set_chain_rules: DNS first (when INTERCEPT_DNS_ENABLE=1)
 	fmt.Fprintf(&b, "-A %s -p udp --dport 53 -j TPROXY --on-port %d --on-ip 127.0.0.1 --tproxy-mark 0x%x\n",
 		ChainName, TPROXYPort, Fwmark)
@@ -303,6 +320,11 @@ func buildRestoreInput(spec RestoreInputSpec) string {
 	// Bypass router admin port so we don't redirect our own UI traffic.
 	// (SKeen has equivalent dynamic admin-port discovery — same intent.)
 	fmt.Fprintf(&b, "-A %s -p tcp --dport 79 -j RETURN\n", RedirectChain)
+
+	// Bypass ports: RETURN before catch-all TCP REDIRECT.
+	for _, port := range spec.BypassTCPPorts {
+		fmt.Fprintf(&b, "-A %s -p tcp --dport %d -j RETURN\n", RedirectChain, port)
+	}
 
 	// add_redirect_rules: catch-all REDIRECT for TCP.
 	fmt.Fprintf(&b, "-A %s -p tcp -j REDIRECT --to-ports %d\n", RedirectChain, RedirectPort)
