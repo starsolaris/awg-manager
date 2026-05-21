@@ -1,0 +1,170 @@
+package nwg
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/hoaxisr/awg-manager/internal/logger"
+	"github.com/hoaxisr/awg-manager/internal/logging"
+	"github.com/hoaxisr/awg-manager/internal/ndms/transport"
+	"github.com/hoaxisr/awg-manager/internal/storage"
+)
+
+// captureServer records every POST body the transport.Client sends and
+// replies with a length-matched empty array so PostBatch's response
+// decoding succeeds.
+type captureServer struct {
+	srv    *httptest.Server
+	bodies []string
+}
+
+func newCaptureServer(t *testing.T) *captureServer {
+	t.Helper()
+	cs := &captureServer{}
+	cs.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		cs.bodies = append(cs.bodies, string(body))
+		// Detect batch vs single payload and reply with a matching shape so
+		// transport.Client.PostBatch and Post both decode successfully.
+		trimmed := strings.TrimLeft(string(body), " \t\r\n")
+		if strings.HasPrefix(trimmed, "[") {
+			var arr []any
+			if err := json.Unmarshal(body, &arr); err == nil {
+				out := make([]map[string]any, len(arr))
+				for i := range out {
+					out[i] = map[string]any{}
+				}
+				_ = json.NewEncoder(w).Encode(out)
+				return
+			}
+		}
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(cs.srv.Close)
+	return cs
+}
+
+// newSyncTestOperator builds the smallest OperatorNativeWG that SyncPeer
+// needs. queries/commands/kmod/hookNotifier stay nil — SyncPeer never
+// touches them.
+func newSyncTestOperator(t *testing.T, srvURL string) *OperatorNativeWG {
+	t.Helper()
+	sem := transport.NewSemaphore(2)
+	return &OperatorNativeWG{
+		transport: transport.NewWithURL(srvURL, sem),
+		log:       logger.New(),
+		appLog:    logging.NewScopedLogger(nil, logging.GroupTunnel, logging.SubLifecycle),
+	}
+}
+
+func TestSyncPeer_NoPreviousKey_OnlyAddsPeer(t *testing.T) {
+	cs := newCaptureServer(t)
+	op := newSyncTestOperator(t, cs.srv.URL)
+
+	stored := &storage.AWGTunnel{
+		NWGIndex: 5,
+		Peer: storage.AWGPeer{
+			PublicKey:  "newkey0000000000000000000000000000000000000=",
+			Endpoint:   "1.2.3.4:51820",
+			AllowedIPs: []string{"0.0.0.0/0"},
+		},
+	}
+
+	if err := op.SyncPeer(context.Background(), stored, ""); err != nil {
+		t.Fatalf("SyncPeer: %v", err)
+	}
+	if len(cs.bodies) != 1 {
+		t.Fatalf("want 1 POST batch, got %d", len(cs.bodies))
+	}
+	if strings.Contains(cs.bodies[0], `"no":true`) {
+		t.Errorf("batch must not contain peer-no command when previousPublicKey is empty:\n%s", cs.bodies[0])
+	}
+}
+
+func TestSyncPeer_SameKey_DoesNotRemovePeer(t *testing.T) {
+	cs := newCaptureServer(t)
+	op := newSyncTestOperator(t, cs.srv.URL)
+
+	sameKey := "samekey0000000000000000000000000000000000000="
+	stored := &storage.AWGTunnel{
+		NWGIndex: 5,
+		Peer: storage.AWGPeer{
+			PublicKey:  sameKey,
+			Endpoint:   "1.2.3.4:51820",
+			AllowedIPs: []string{"0.0.0.0/0"},
+		},
+	}
+
+	if err := op.SyncPeer(context.Background(), stored, sameKey); err != nil {
+		t.Fatalf("SyncPeer: %v", err)
+	}
+	if len(cs.bodies) != 1 {
+		t.Fatalf("want 1 POST batch, got %d", len(cs.bodies))
+	}
+	if strings.Contains(cs.bodies[0], `"no":true`) {
+		t.Errorf("batch must not contain peer-no command when previousPublicKey == current PublicKey:\n%s", cs.bodies[0])
+	}
+}
+
+// TestSyncPeer_DifferentPreviousKey_RemovesOldPeer is the regression test
+// for issue #136 (https://github.com/hoaxisr/awg-manager/issues/136).
+//
+// When a NativeWG tunnel's config is replaced and the peer's public key
+// changes, the SyncPeer batch MUST include a `peer ... no true` command
+// for the OLD key. NDMS indexes peers by key — without explicit removal
+// the interface ends up with both old and new peers and NDMS reports
+// `subnet overlaps with the other peer`.
+//
+// Fix lives in nwg/sync.go:159-161 and service/impl.go:761 (commit
+// e6d488ea, 2026-05-07).
+func TestSyncPeer_DifferentPreviousKey_RemovesOldPeer(t *testing.T) {
+	cs := newCaptureServer(t)
+	op := newSyncTestOperator(t, cs.srv.URL)
+
+	oldKey := "oldkey0000000000000000000000000000000000000Y="
+	newKey := "newkey0000000000000000000000000000000000000c="
+	stored := &storage.AWGTunnel{
+		NWGIndex: 5,
+		Peer: storage.AWGPeer{
+			PublicKey:  newKey,
+			Endpoint:   "4.4.4.4:4444",
+			AllowedIPs: []string{"0.0.0.0/0", "::/0"},
+		},
+	}
+
+	if err := op.SyncPeer(context.Background(), stored, oldKey); err != nil {
+		t.Fatalf("SyncPeer: %v", err)
+	}
+	if len(cs.bodies) != 1 {
+		t.Fatalf("want 1 POST batch, got %d (bodies=%v)", len(cs.bodies), cs.bodies)
+	}
+
+	body := cs.bodies[0]
+
+	// Must contain the OLD key — referenced by the peer-no command.
+	if !strings.Contains(body, oldKey) {
+		t.Errorf("batch must reference old key %q:\n%s", oldKey, body)
+	}
+	if !strings.Contains(body, `"no":true`) {
+		t.Errorf("batch must contain peer-no command for old key:\n%s", body)
+	}
+	// And must add the new peer.
+	if !strings.Contains(body, newKey) {
+		t.Errorf("batch must reference new key %q:\n%s", newKey, body)
+	}
+
+	// peer-no MUST appear before peer-add in the batch JSON. NDMS may
+	// not respect strict ordering, but the client must always emit them
+	// in this order — if a future refactor swaps them, this test fires.
+	noIdx := strings.Index(body, `"no":true`)
+	addIdx := strings.Index(body, newKey)
+	if noIdx < 0 || addIdx < 0 || noIdx > addIdx {
+		t.Errorf("expected peer-no BEFORE peer-add in batch (noIdx=%d, addIdx=%d):\n%s",
+			noIdx, addIdx, body)
+	}
+}
