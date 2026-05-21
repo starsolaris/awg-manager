@@ -87,7 +87,7 @@ func (p *fakePublisher) Hints() []events.ResourceInvalidatedEvent {
 func TestSaveCoordinator_SingleRequestTriggersSave(t *testing.T) {
 	poster := &fakePoster{}
 	pub := &fakePublisher{}
-	sc := NewSaveCoordinator(poster, pub, 20*time.Millisecond, 100*time.Millisecond)
+	sc := NewSaveCoordinator(poster, pub, 20*time.Millisecond, 100*time.Millisecond, 0, nil)
 
 	sc.Request()
 	time.Sleep(50 * time.Millisecond)
@@ -100,7 +100,7 @@ func TestSaveCoordinator_SingleRequestTriggersSave(t *testing.T) {
 func TestSaveCoordinator_MultipleRequestsCoalesce(t *testing.T) {
 	poster := &fakePoster{}
 	pub := &fakePublisher{}
-	sc := NewSaveCoordinator(poster, pub, 30*time.Millisecond, 500*time.Millisecond)
+	sc := NewSaveCoordinator(poster, pub, 30*time.Millisecond, 500*time.Millisecond, 0, nil)
 
 	for i := 0; i < 5; i++ {
 		sc.Request()
@@ -117,7 +117,7 @@ func TestSaveCoordinator_MaxWaitCapsDelay(t *testing.T) {
 	poster := &fakePoster{}
 	pub := &fakePublisher{}
 	// Tight maxWait; debounce is larger than the whole test window.
-	sc := NewSaveCoordinator(poster, pub, 500*time.Millisecond, 80*time.Millisecond)
+	sc := NewSaveCoordinator(poster, pub, 500*time.Millisecond, 80*time.Millisecond, 0, nil)
 
 	start := time.Now()
 	// Issue Requests faster than debounce so debounce would never fire,
@@ -152,7 +152,7 @@ func TestSaveCoordinator_MaxWaitCapsDelay(t *testing.T) {
 func TestSaveCoordinator_PublishesStatusTransitions(t *testing.T) {
 	poster := &fakePoster{sleep: 20 * time.Millisecond}
 	pub := &fakePublisher{}
-	sc := NewSaveCoordinator(poster, pub, 15*time.Millisecond, 100*time.Millisecond)
+	sc := NewSaveCoordinator(poster, pub, 15*time.Millisecond, 100*time.Millisecond, 0, nil)
 
 	sc.Request()
 	time.Sleep(80 * time.Millisecond)
@@ -181,7 +181,7 @@ func TestSaveCoordinator_RetryOnFailure(t *testing.T) {
 	poster.SetError(boom)
 
 	pub := &fakePublisher{}
-	sc := NewSaveCoordinator(poster, pub, 10*time.Millisecond, 100*time.Millisecond)
+	sc := NewSaveCoordinator(poster, pub, 10*time.Millisecond, 100*time.Millisecond, 0, nil)
 	sc.SetRetryPolicy(20*time.Millisecond, 3) // 3 retries, 20ms apart
 
 	sc.Request()
@@ -212,7 +212,7 @@ func TestSaveCoordinator_RetrySucceedsClearsError(t *testing.T) {
 	poster.SetError(errors.New("first flake"))
 
 	pub := &fakePublisher{}
-	sc := NewSaveCoordinator(poster, pub, 10*time.Millisecond, 100*time.Millisecond)
+	sc := NewSaveCoordinator(poster, pub, 10*time.Millisecond, 100*time.Millisecond, 0, nil)
 	sc.SetRetryPolicy(20*time.Millisecond, 3)
 
 	sc.Request()
@@ -232,7 +232,7 @@ func TestSaveCoordinator_RetrySucceedsClearsError(t *testing.T) {
 func TestSaveCoordinator_FlushBypassesDebounce(t *testing.T) {
 	poster := &fakePoster{}
 	pub := &fakePublisher{}
-	sc := NewSaveCoordinator(poster, pub, 500*time.Millisecond, 1*time.Second)
+	sc := NewSaveCoordinator(poster, pub, 500*time.Millisecond, 1*time.Second, 0, nil)
 
 	sc.Request()
 	// Immediately Flush — debounce would otherwise keep Save pending.
@@ -249,7 +249,7 @@ func TestSaveCoordinator_FlushClearsFailedState(t *testing.T) {
 	poster.SetError(errors.New("down"))
 
 	pub := &fakePublisher{}
-	sc := NewSaveCoordinator(poster, pub, 10*time.Millisecond, 50*time.Millisecond)
+	sc := NewSaveCoordinator(poster, pub, 10*time.Millisecond, 50*time.Millisecond, 0, nil)
 	sc.SetRetryPolicy(10*time.Millisecond, 1)
 
 	sc.Request()
@@ -269,7 +269,7 @@ func TestSaveCoordinator_FlushFailureGoesToFailed(t *testing.T) {
 	poster := &fakePoster{}
 	poster.SetError(errors.New("flash write failed"))
 	pub := &fakePublisher{}
-	sc := NewSaveCoordinator(poster, pub, 100*time.Millisecond, 500*time.Millisecond)
+	sc := NewSaveCoordinator(poster, pub, 100*time.Millisecond, 500*time.Millisecond, 0, nil)
 
 	err := sc.Flush(context.Background())
 	if err == nil {
@@ -295,7 +295,7 @@ func TestSaveCoordinator_FlushConcurrentWithInFlightFire(t *testing.T) {
 	// would overwrite Flush's state.
 	poster := &fakePoster{sleep: 60 * time.Millisecond}
 	pub := &fakePublisher{}
-	sc := NewSaveCoordinator(poster, pub, 10*time.Millisecond, 100*time.Millisecond)
+	sc := NewSaveCoordinator(poster, pub, 10*time.Millisecond, 100*time.Millisecond, 0, nil)
 
 	sc.Request()
 	// Wait long enough that fire() has been dispatched and is inside
@@ -330,7 +330,7 @@ func TestSaveCoordinator_FlushConcurrentWithInFlightFire(t *testing.T) {
 func TestSaveCoordinator_StatusSnapshot(t *testing.T) {
 	poster := &fakePoster{}
 	pub := &fakePublisher{}
-	sc := NewSaveCoordinator(poster, pub, 20*time.Millisecond, 100*time.Millisecond)
+	sc := NewSaveCoordinator(poster, pub, 20*time.Millisecond, 100*time.Millisecond, 0, nil)
 
 	// Fresh coordinator: Idle, 0 pending.
 	if st := sc.Status(); st.State != SaveStateIdle || st.PendingCount != 0 {

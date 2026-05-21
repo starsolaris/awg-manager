@@ -15,6 +15,17 @@ type Poster interface {
 	Post(ctx context.Context, payload any) (json.RawMessage, error)
 }
 
+// PostSaveInvalidator is the minimal cache-invalidation surface
+// SaveCoordinator needs after a successful save. RunningConfigStore
+// from internal/ndms/query satisfies it via the embedded
+// *cache.ListStore[T].InvalidateAll() promoted method.
+//
+// The interface is declared here (not in query/) to keep
+// SaveCoordinator's package free of an import cycle with query/.
+type PostSaveInvalidator interface {
+	InvalidateAll()
+}
+
 // savePayload is the NDMS command for "persist running-config to flash".
 // Matches the exact shape Keenetic's own web UI uses:
 //   {"system":{"configuration":{"save":{}}}}
@@ -41,6 +52,9 @@ type SaveCoordinator struct {
 	retryDelay time.Duration
 	maxRetries int
 
+	settleDelay time.Duration
+	invalidator PostSaveInvalidator
+
 	mu              sync.Mutex
 	timer           *time.Timer
 	firstAt         time.Time // zero if no pending batch
@@ -59,19 +73,43 @@ const (
 )
 
 // NewSaveCoordinator constructs a coordinator with production defaults.
-// debounce — delay before firing Save after the last Request().
-// maxWait  — hard ceiling from first Request() in the current batch.
+// debounce    — delay before firing Save after the last Request().
+// maxWait     — hard ceiling from first Request() in the current batch.
+// settleDelay — pause after a successful save before invalidating the
+//               RunningConfig cache. NDMS publishes running-config
+//               asynchronously after writing flash, so reads issued
+//               immediately after save would still see the old view.
+//               Pass 0 to disable settle entirely (skip both sleep and
+//               invalidate).
+// invalidator — cache surface invalidated after settle. Pass nil to
+//               disable settle (sleep is still skipped). Typically
+//               wired to query.Queries.RunningConfig.
 // Retries: 3 attempts 5 seconds apart after a failed fire.
-func NewSaveCoordinator(poster Poster, pub StatusPublisher, debounce, maxWait time.Duration) *SaveCoordinator {
+func NewSaveCoordinator(
+	poster Poster,
+	pub StatusPublisher,
+	debounce, maxWait, settleDelay time.Duration,
+	invalidator PostSaveInvalidator,
+) *SaveCoordinator {
 	return &SaveCoordinator{
-		poster:     poster,
-		publisher:  pub,
-		debounce:   debounce,
-		maxWait:    maxWait,
-		retryDelay: defaultRetryDelay,
-		maxRetries: defaultMaxRetries,
-		state:      SaveStateIdle,
+		poster:      poster,
+		publisher:   pub,
+		debounce:    debounce,
+		maxWait:     maxWait,
+		retryDelay:  defaultRetryDelay,
+		maxRetries:  defaultMaxRetries,
+		settleDelay: settleDelay,
+		invalidator: invalidator,
+		state:       SaveStateIdle,
 	}
+}
+
+// SetSettleDelay overrides the post-save settle delay — used by tests
+// that need sub-second timings. Mirrors the SetRetryPolicy pattern.
+func (s *SaveCoordinator) SetSettleDelay(d time.Duration) {
+	s.mu.Lock()
+	s.settleDelay = d
+	s.mu.Unlock()
 }
 
 // SetRetryPolicy overrides the retry delay and max retries — used by tests
