@@ -857,6 +857,8 @@ func (s *ServiceImpl) Disable(ctx context.Context) error {
 	s.currentMark = ""
 	s.currentWANIPs = nil
 	s.currentLANBridges = nil
+	s.currentBypassPresets = nil
+	s.currentBypassExtraPorts = ""
 	s.netfilterStateKnown = false
 
 	if s.deps.Orch != nil {
