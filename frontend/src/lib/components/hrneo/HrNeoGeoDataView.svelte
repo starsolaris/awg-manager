@@ -153,6 +153,7 @@
 	}
 
 	function canUpdate(f: GeoFileEntry): boolean {
+		if (f.external) return false;
 		return !!(f.url || f.type === 'geoip' || f.type === 'geosite');
 	}
 
@@ -193,7 +194,7 @@
 			disabled={busy !== null}
 			loading={busy === 'sync'}
 			onclick={syncFromHR}
-			title="Подтянуть пути из hrneo.conf (External) и перекачать все .dat по сохранённым URL"
+			title="Подтянуть пути из hrneo.conf (External) и перекачать файлы AWGM (External не трогаем — обновляйте в HR Neo)"
 		>
 			Синхронизировать
 		</Button>

@@ -180,7 +180,7 @@ func TestAdoptExternalFiles_SkipsUnmanagedPaths(t *testing.T) {
 	}
 }
 
-func TestUpdate_UsesDefaultURLForKnownExternalType(t *testing.T) {
+func TestUpdate_RejectsExternalEntry(t *testing.T) {
 	store := newTestGeoStore(t)
 	path := filepath.Join(store.geoDir, "adopted.dat")
 	if err := os.WriteFile(path, []byte("x"), 0644); err != nil {
@@ -188,18 +188,16 @@ func TestUpdate_UsesDefaultURLForKnownExternalType(t *testing.T) {
 	}
 	store.mu.Lock()
 	store.entries = []GeoFileEntry{
-		{Type: "geosite", Path: path, URL: "", External: true},
+		{Type: "geosite", Path: path, URL: GroundZerroGeoSiteURL, External: true},
 	}
 	store.mu.Unlock()
 
-	// downloadFile will fail (no network / invalid dat) — we only assert the
-	// error is from download, not "no source URL".
 	_, err := store.Update(path)
 	if err == nil {
-		t.Fatal("Update returned nil, expected download error")
+		t.Fatal("Update returned nil, expected error for external entry")
 	}
-	if strings.Contains(err.Error(), "no source URL") {
-		t.Fatalf("unexpected no-source-url error: %v", err)
+	if !strings.Contains(err.Error(), "external") {
+		t.Fatalf("err = %q, want external rejection", err)
 	}
 }
 

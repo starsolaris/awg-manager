@@ -312,6 +312,9 @@ func (s *GeoDataStore) Update(path string) (*GeoFileEntry, error) {
 	}
 
 	entry := s.entries[idx]
+	if entry.External {
+		return nil, fmt.Errorf("cannot update external file managed by HydraRoute Neo — use «Взять под контроль» or update in HR Neo")
+	}
 	sourceURL := entry.URL
 	if sourceURL == "" {
 		sourceURL = defaultURLForType(entry.Type)
@@ -354,13 +357,16 @@ func (s *GeoDataStore) Update(path string) (*GeoFileEntry, error) {
 	return &updated, nil
 }
 
-// UpdateAll updates all tracked files sequentially and returns the count updated.
+// UpdateAll updates all non-external tracked files sequentially.
 func (s *GeoDataStore) UpdateAll() (int, error) {
 	// Collect paths outside the lock so Update can re-acquire it.
 	s.mu.RLock()
-	paths := make([]string, len(s.entries))
-	for i, e := range s.entries {
-		paths[i] = e.Path
+	var paths []string
+	for _, e := range s.entries {
+		if e.External {
+			continue
+		}
+		paths = append(paths, e.Path)
 	}
 	s.mu.RUnlock()
 
