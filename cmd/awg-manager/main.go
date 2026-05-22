@@ -239,7 +239,6 @@ func main() {
 
 	awgStore := storage.NewAWGTunnelStore(
 		filepath.Join(*dataDir, "tunnels"),
-		log,
 	)
 
 	// Logging service (created early — injected into tunnel service, pingcheck, dnsroute, operator, state, firewall, nwg)
@@ -1675,7 +1674,7 @@ func runCleanup(dataDir string) {
 	settingsStore := storage.NewSettingsStore(dataDir)
 	settingsStore.Load()
 
-	awgStore := storage.NewAWGTunnelStore(filepath.Join(dataDir, "tunnels"), log)
+	awgStore := storage.NewAWGTunnelStore(filepath.Join(dataDir, "tunnels"))
 
 	// Build minimal NDMS CQRS layer first — state.Manager consumes
 	// Queries.Interfaces, and ProxyManager / dnsroute / accesspolicy share

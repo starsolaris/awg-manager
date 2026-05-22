@@ -31,7 +31,7 @@ func testService(t *testing.T) (*ServiceImpl, *storage.AWGTunnelStore, *mockOp, 
 	confDir = confTestDir
 	t.Cleanup(func() { confDir = oldConfDir })
 
-	store := storage.NewAWGTunnelStoreWithLockDir(dir, nil, lockDir)
+	store := storage.NewAWGTunnelStoreWithLockDir(dir, lockDir)
 	stateMgr := NewMockStateManager()
 	op := newMockOp()
 	op.stateMgr = stateMgr // wire up for Stop → state update
