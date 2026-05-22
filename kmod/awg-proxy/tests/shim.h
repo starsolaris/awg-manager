@@ -103,6 +103,12 @@ void shim_set_fixed_time(uint32_t unix_seconds);
 void get_random_bytes(void *buf, int n);
 uint64_t ktime_get_real_seconds(void);
 
+/* ---- Kernel compat ---- */
+#ifndef EBADMSG
+#define EBADMSG 74
+#endif
+static inline void memzero_explicit(void *p, size_t n) { memset(p, 0, n); }
+
 /* ---- Warning macros (no-op on host) ---- */
 #define WARN_ON_ONCE(cond) ({ int _c = !!(cond); if (_c) fprintf(stderr, "WARN_ON_ONCE %s\n", #cond); _c; })
 #define pr_warn(fmt, ...)  fprintf(stderr, "[pr_warn] " fmt, ##__VA_ARGS__)

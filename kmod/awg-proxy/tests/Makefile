@@ -34,8 +34,8 @@ test: test_cps test_transform test_tunnel
 test_cps: test_cps.c shim.c shim.h $(SRC)/cps.c
 	$(CC) $(CFLAGS) -o $@ test_cps.c shim.c $(SRC)/cps.c $(LDFLAGS)
 
-test_transform: test_transform.c shim.c shim.h $(SRC)/transform.c $(SRC)/blake2s.c $(SRC)/cps.c
-	$(CC) $(CFLAGS) -o $@ test_transform.c shim.c $(SRC)/transform.c $(SRC)/blake2s.c $(SRC)/cps.c $(LDFLAGS)
+test_transform: test_transform.c shim.c shim.h $(SRC)/transform.c $(SRC)/blake2s.c $(SRC)/cps.c $(SRC)/cookie.c
+	$(CC) $(CFLAGS) -o $@ test_transform.c shim.c $(SRC)/transform.c $(SRC)/blake2s.c $(SRC)/cps.c $(SRC)/cookie.c $(LDFLAGS)
 
 test_tunnel: test_tunnel.c shim.c shim.h $(SRC)/tunnel.c $(SRC)/transform.c $(SRC)/blake2s.c $(SRC)/cps.c
 	$(CC) $(CFLAGS) -o $@ test_tunnel.c shim.c $(SRC)/tunnel.c $(SRC)/transform.c $(SRC)/blake2s.c $(SRC)/cps.c $(LDFLAGS)
