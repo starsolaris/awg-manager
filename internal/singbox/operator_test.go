@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1107,6 +1109,98 @@ func TestRemoveTunnel_EmptyProxyInterface_ParseSentinelSkipsNDMS(t *testing.T) {
 	}
 	if idx >= 0 {
 		t.Errorf("sentinel must be < 0 (so guard skips RemoveProxy), got %d", idx)
+	}
+}
+
+// TestListTunnels_Running_NDMSDisabled_UsesClash verifies that when the
+// NDMS Proxy toggle is off, ListTunnels falls back from the kernel-iface
+// probe (which would always return false — no t2sN exists) to the Clash
+// /proxies endpoint. It also pins the post-condition that derived
+// ProxyInterface/KernelInterface (which Tunnels() computes from
+// listenPort regardless of mode) are cleared in the returned slice so
+// the API/UI consistently reflect the NDMS-free state.
+func TestListTunnels_Running_NDMSDisabled_UsesClash(t *testing.T) {
+	// Test config has listen_port = firstPort (= 1080), so Tunnels()
+	// parser DOES derive ProxyInterface=Proxy0 / KernelInterface=t2s0
+	// from listenPort — we then assert the disabled path clears them.
+	tunnelsJSON := `{
+		"inbounds":[{"type":"mixed","tag":"us-vless-in","listen":"127.0.0.1","listen_port":1080}],
+		"outbounds":[{"type":"vless","tag":"us-vless","server":"x","server_port":443}],
+		"route":{"rules":[{"inbound":"us-vless-in","outbound":"us-vless"}]}
+	}`
+
+	cases := []struct {
+		name          string
+		clashHandler  func(http.ResponseWriter, *http.Request)
+		clashAddr     string // overrides if non-empty
+		wantRunning   bool
+	}{
+		{
+			name: "clash reports outbound present → Running true",
+			clashHandler: func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/proxies" {
+					_, _ = io.WriteString(w, `{"proxies":{"us-vless":{"name":"us-vless","type":"vless"}}}`)
+					return
+				}
+				http.NotFound(w, r)
+			},
+			wantRunning: true,
+		},
+		{
+			name:        "clash unreachable → Running false",
+			clashAddr:   "127.0.0.1:1", // unused port
+			wantRunning: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			configDir := filepath.Join(dir, "config.d")
+			if err := os.MkdirAll(configDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(configDir, "10-tunnels.json"), []byte(tunnelsJSON), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			pidPath := filepath.Join(dir, "sing-box.pid")
+			if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d\n", os.Getpid())), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			op := newOperatorForTest(t, withNDMSProxyEnabled(func() bool { return false }))
+			op.dir = dir
+			op.configPath = configDir
+			op.pidPath = pidPath
+			op.proc = NewProcess(op.binary, configDir, pidPath)
+
+			var srvAddr string
+			if tc.clashHandler != nil {
+				srv := httptest.NewServer(http.HandlerFunc(tc.clashHandler))
+				defer srv.Close()
+				srvAddr = strings.TrimPrefix(srv.URL, "http://")
+			} else {
+				srvAddr = tc.clashAddr
+			}
+			op.clash = NewClashClient(srvAddr)
+
+			tuns, err := op.ListTunnels(context.Background())
+			if err != nil {
+				t.Fatalf("ListTunnels: %v", err)
+			}
+			if len(tuns) != 1 {
+				t.Fatalf("tunnels = %d, want 1", len(tuns))
+			}
+			if tuns[0].Running != tc.wantRunning {
+				t.Errorf("Running = %v, want %v", tuns[0].Running, tc.wantRunning)
+			}
+			if tuns[0].ProxyInterface != "" {
+				t.Errorf("ProxyInterface = %q, want empty in disabled mode", tuns[0].ProxyInterface)
+			}
+			if tuns[0].KernelInterface != "" {
+				t.Errorf("KernelInterface = %q, want empty in disabled mode", tuns[0].KernelInterface)
+			}
+		})
 	}
 }
 

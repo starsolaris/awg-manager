@@ -1180,8 +1180,19 @@ func (o *Operator) ListTunnels(ctx context.Context) ([]TunnelInfo, error) {
 	}
 	tunnels := cfg.Tunnels()
 	procAlive, _ := o.proc.IsRunning()
+	ndmsEnabled := o.isNDMSProxyEnabled()
 	for i := range tunnels {
-		tunnels[i].Running = procAlive && kernelInterfaceExists(tunnels[i].KernelInterface)
+		t := &tunnels[i]
+		if ndmsEnabled && t.KernelInterface != "" {
+			t.Running = procAlive && kernelInterfaceExists(t.KernelInterface)
+			continue
+		}
+		// NDMS Proxy off → нет t2sN в ядре, проверяем outbound через Clash.
+		// Полей ProxyInterface/KernelInterface не должно быть видно наверх:
+		// Tunnels() парсер derives их из listenPort всегда, здесь чистим.
+		t.Running = procAlive && o.clash.HasOutbound(t.Tag)
+		t.ProxyInterface = ""
+		t.KernelInterface = ""
 	}
 	return tunnels, nil
 }
