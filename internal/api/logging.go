@@ -101,6 +101,30 @@ func parseBucket(raw string, def logging.Bucket) (logging.Bucket, bool) {
 	return "", false
 }
 
+// queryList reads repeated query params and comma-separated values.
+// For example: group=a&group=b and group=a,b.
+func queryList(q map[string][]string, key string) []string {
+	values := q[key]
+	out := make([]string, 0, len(values))
+	seen := map[string]struct{}{}
+
+	for _, raw := range values {
+		for _, part := range strings.Split(raw, ",") {
+			v := strings.TrimSpace(part)
+			if v == "" {
+				continue
+			}
+			if _, ok := seen[v]; ok {
+				continue
+			}
+			seen[v] = struct{}{}
+			out = append(out, v)
+		}
+	}
+
+	return out
+}
+
 // GetLogs returns log entries from the requested bucket with optional
 // filtering and pagination.
 //
@@ -112,8 +136,8 @@ func parseBucket(raw string, def logging.Bucket) (logging.Bucket, bool) {
 //	@Produce		json
 //	@Security		CookieAuth
 //	@Param			bucket		query		string	false	"Bucket selector"		Enums(app, singbox)
-//	@Param			group		query		string	false	"Filter by group"
-//	@Param			subgroup	query		string	false	"Filter by subgroup"
+//	@Param			group		query		[]string	false	"Filter by group (repeat param or comma-separated values)"	collectionFormat(multi)
+//	@Param			subgroup	query		[]string	false	"Filter by subgroup (repeat param or comma-separated values)"	collectionFormat(multi)
 //	@Param			level		query		string	false	"Filter by level"
 //	@Param			limit		query		int		false	"Max entries to return (default 200)"
 //	@Param			offset		query		int		false	"Skip first N matching entries"
@@ -135,21 +159,22 @@ func (h *LoggingHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	group := r.URL.Query().Get("group")
-	subgroup := r.URL.Query().Get("subgroup")
-	level := r.URL.Query().Get("level")
+	q := r.URL.Query()
+	groups := queryList(q, "group")
+	subgroups := queryList(q, "subgroup")
+	level := q.Get("level")
 
 	// Backward compat for old "category" param
-	if cat := r.URL.Query().Get("category"); cat != "" && group == "" {
+	if cat := q.Get("category"); cat != "" && len(groups) == 0 {
 		switch cat {
 		case "tunnel":
-			group = logging.GroupTunnel
+			groups = []string{logging.GroupTunnel}
 		case "settings":
-			group, subgroup = logging.GroupSystem, logging.SubSettings
+			groups, subgroups = []string{logging.GroupSystem}, []string{logging.SubSettings}
 		case "system":
-			group = logging.GroupSystem
+			groups = []string{logging.GroupSystem}
 		case "dns-route":
-			group, subgroup = logging.GroupRouting, logging.SubDnsRoute
+			groups, subgroups = []string{logging.GroupRouting}, []string{logging.SubDnsRoute}
 		}
 	}
 
@@ -175,7 +200,7 @@ func (h *LoggingHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	logs, total := h.svc.GetLogs(bucket, group, subgroup, level, since, limit, offset)
+	logs, total := h.svc.GetLogsMulti(bucket, groups, subgroups, level, since, limit, offset)
 	if logs == nil {
 		logs = []logging.LogEntry{}
 	}

@@ -56,4 +56,44 @@ describe('ApiClient error shape', () => {
 		expect(err.body).toEqual(fakeBody);
 		expect(err.message).toBe('тест');
 	});
+
+	it('serializes multi-select log filters as repeated query params', async () => {
+		let capturedUrl = '';
+		globalThis.fetch = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+			capturedUrl = String(input);
+			return new Response(
+				JSON.stringify({
+					success: true,
+					data: {
+						enabled: true,
+						logs: [],
+						total: 0,
+						bucket: 'app',
+						bufferSize: 0,
+						bufferCapacity: 5000,
+					},
+				}),
+				{
+					status: 200,
+					headers: { 'Content-Type': 'application/json' },
+				},
+			);
+		});
+
+		await api.getLogs({
+			bucket: 'singbox',
+			groups: ['singbox'],
+			subgroups: ['inbound', 'dns'],
+			limit: 200,
+			offset: 0,
+		});
+
+		const url = new URL(capturedUrl, 'http://test.local');
+		expect(url.pathname).toBe('/api/logs');
+		expect(url.searchParams.get('bucket')).toBe('singbox');
+		expect(url.searchParams.getAll('group')).toEqual(['singbox']);
+		expect(url.searchParams.getAll('subgroup')).toEqual(['inbound', 'dns']);
+		expect(url.searchParams.get('limit')).toBe('200');
+		expect(url.searchParams.get('offset')).toBe('0');
+	});
 });

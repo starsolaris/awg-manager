@@ -6016,14 +6016,20 @@ paths:
         in: query
         name: bucket
         type: string
-      - description: Filter by group
+      - collectionFormat: multi
+        description: Filter by group (repeat param or comma-separated values)
         in: query
+        items:
+          type: string
         name: group
-        type: string
-      - description: Filter by subgroup
+        type: array
+      - collectionFormat: multi
+        description: Filter by subgroup (repeat param or comma-separated values)
         in: query
+        items:
+          type: string
         name: subgroup
-        type: string
+        type: array
       - description: Filter by level
         in: query
         name: level

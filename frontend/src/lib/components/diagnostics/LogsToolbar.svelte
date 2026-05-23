@@ -3,8 +3,8 @@
 
   export interface LogsFilter {
     search: string;
-    group: string;
-    subgroup: string;
+    groups: string[];
+    subgroups: string[];
     levels: string[];
   }
 
@@ -95,6 +95,8 @@
     onCopy: () => void;
     onDownload: () => void;
     onClear: () => void;
+    showFullTimestamp: boolean;
+    onToggleFullTimestamp: () => void;
     totalEntries: number;
     visibleEntries: number;
     bufferStats: BufferBadge;
@@ -116,6 +118,8 @@
     onCopy,
     onDownload,
     onClear,
+    showFullTimestamp,
+    onToggleFullTimestamp,
     totalEntries,
     visibleEntries,
     bufferStats,
@@ -150,25 +154,46 @@
     onFilterChange({ ...filter });
   }
 
-  function selectGroup(g: string) {
-    if (filter.group === g) return;
-    filter.group = g;
-    filter.subgroup = '';
+  function clearGroups() {
+    filter.groups = [];
+    filter.subgroups = [];
     onFilterChange({ ...filter });
   }
 
-  function selectSubgroup(s: string) {
-    if (filter.subgroup === s) return;
-    filter.subgroup = s;
+  function toggleGroup(g: string) {
+    const set = new Set(filter.groups);
+    if (set.has(g)) {
+      set.delete(g);
+    } else {
+      set.add(g);
+    }
+    filter.groups = Array.from(set);
+    filter.subgroups = [];
+    onFilterChange({ ...filter });
+  }
+
+  function clearSubgroups() {
+    filter.subgroups = [];
+    onFilterChange({ ...filter });
+  }
+
+  function toggleSubgroup(s: string) {
+    const set = new Set(filter.subgroups);
+    if (set.has(s)) {
+      set.delete(s);
+    } else {
+      set.add(s);
+    }
+    filter.subgroups = Array.from(set);
     onFilterChange({ ...filter });
   }
 
   function toggleProfilingFilter() {
-    if (filter.subgroup === 'profiling') {
-      filter.subgroup = '';
+    if (filter.subgroups.includes('profiling')) {
+      filter.subgroups = [];
     } else {
-      filter.group = '';
-      filter.subgroup = 'profiling';
+      filter.groups = [];
+      filter.subgroups = ['profiling'];
     }
     onFilterChange({ ...filter });
   }
@@ -273,9 +298,9 @@
         <button
           type="button"
           class="chip chip-profiling-stack"
-          class:chip-active={filter.subgroup === 'profiling'}
+          class:chip-active={filter.subgroups.includes('profiling')}
           aria-label="Журнал медленных HTTP-запросов"
-          aria-pressed={filter.subgroup === 'profiling'}
+          aria-pressed={filter.subgroups.includes('profiling')}
           onclick={toggleProfilingFilter}
         >
           Profiling
@@ -286,23 +311,23 @@
     <span class="divider" aria-hidden="true"></span>
 
     <span class="chip-row" role="group" aria-label="Фильтр по группе">
-      <button
-        type="button"
-        class="chip chip-group-pill"
-        class:chip-active={!filter.group}
-        aria-pressed={!filter.group}
-        onclick={() => selectGroup('')}
-      >
-        ALL
-      </button>
+        <button
+          type="button"
+          class="chip chip-group-pill"
+          class:chip-active={filter.groups.length === 0}
+          aria-pressed={filter.groups.length === 0}
+          onclick={clearGroups}
+        >
+          ALL
+        </button>
       {#each groupOptions as g (g)}
-        {@const active = filter.group === g}
+        {@const active = filter.groups.includes(g)}
         <button
           type="button"
           class="chip chip-group-pill chip-group-{g}"
           class:chip-active={active}
           aria-pressed={active}
-          onclick={() => selectGroup(g)}
+          onclick={() => toggleGroup(g)}
         >
           {GROUP_LABELS[g] ?? g}
         </button>
@@ -310,27 +335,27 @@
     </span>
   </div>
 
-  {#if availableSubgroups.length > 0 && (filter.group || bucket === 'singbox')}
+  {#if availableSubgroups.length > 0 && (filter.groups.length > 0 || bucket === 'singbox')}
     <div class="row row-subgroups">
       <span class="sub-label">Подгруппа</span>
       <span class="chip-row" role="group" aria-label="Фильтр по подгруппе">
         <button
           type="button"
           class="chip chip-sub"
-          class:chip-active={!filter.subgroup}
-          aria-pressed={!filter.subgroup}
-          onclick={() => selectSubgroup('')}
+          class:chip-active={filter.subgroups.length === 0}
+          aria-pressed={filter.subgroups.length === 0}
+          onclick={clearSubgroups}
         >
           ALL
         </button>
         {#each visibleSubgroups as s (s)}
-          {@const active = filter.subgroup === s}
+          {@const active = filter.subgroups.includes(s)}
           <button
             type="button"
             class="chip chip-sub"
             class:chip-active={active}
             aria-pressed={active}
-            onclick={() => selectSubgroup(s)}
+            onclick={() => toggleSubgroup(s)}
           >
             {SUBGROUP_LABELS[s] ?? s}
           </button>
@@ -352,6 +377,22 @@
     <span class="counter">{visibleEntries}/{totalEntries}</span>
 
     <span class="actions">
+      <button
+        type="button"
+        class="chip chip-timestamp"
+        class:chip-active={showFullTimestamp}
+        aria-pressed={showFullTimestamp}
+        title={showFullTimestamp ? 'Скрыть дату и часовой пояс' : 'Показать дату и часовой пояс'}
+        onclick={onToggleFullTimestamp}
+      >
+        <svg class="chip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false">
+          <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        Дата
+      </button>
       <button type="button" class="chip" onclick={onTogglePause}>
         <svg class="chip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false">
           {#if paused}

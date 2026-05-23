@@ -125,6 +125,20 @@ func (s *Service) AppLog(level Level, group, subgroup, action, target, message s
 // to entries strictly after that time (SSE catch-up after reconnect).
 // Returns the page slice and the total count of filtered entries.
 func (s *Service) GetLogs(bucket Bucket, group, subgroup, level string, since time.Time, limit, offset int) ([]LogEntry, int) {
+	var groups []string
+	var subgroups []string
+	if group != "" {
+		groups = []string{group}
+	}
+	if subgroup != "" {
+		subgroups = []string{subgroup}
+	}
+	return s.GetLogsMulti(bucket, groups, subgroups, level, since, limit, offset)
+}
+
+// GetLogsMulti returns entries from the specified bucket filtered by multiple
+// groups/subgroups and level with pagination.
+func (s *Service) GetLogsMulti(bucket Bucket, groups []string, subgroups []string, level string, since time.Time, limit, offset int) ([]LogEntry, int) {
 	if limit <= 0 {
 		limit = 200
 	}
@@ -132,7 +146,7 @@ func (s *Service) GetLogs(bucket Bucket, group, subgroup, level string, since ti
 	if buf == nil {
 		return nil, 0
 	}
-	return buf.GetPaginated(group, subgroup, level, since, limit, offset)
+	return buf.GetPaginatedMulti(groups, subgroups, level, since, limit, offset)
 }
 
 // Clear removes all entries from the specified bucket.

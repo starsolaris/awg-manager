@@ -685,6 +685,8 @@ class ApiClient {
 		bucket?: 'app' | 'singbox';
 		group?: string;
 		subgroup?: string;
+		groups?: string[];
+		subgroups?: string[];
 		level?: string;
 		since?: number;
 		limit?: number;
@@ -692,12 +694,18 @@ class ApiClient {
 	}): Promise<LogsResponse> {
 		const query = new URLSearchParams();
 		if (params?.bucket) query.set('bucket', params.bucket);
-		if (params?.group) query.set('group', params.group);
-		if (params?.subgroup) query.set('subgroup', params.subgroup);
+		if (params?.group) query.append('group', params.group);
+		for (const g of params?.groups ?? []) {
+			if (g) query.append('group', g);
+		}
+		if (params?.subgroup) query.append('subgroup', params.subgroup);
+		for (const s of params?.subgroups ?? []) {
+			if (s) query.append('subgroup', s);
+		}
 		if (params?.level) query.set('level', params.level);
 		if (params?.since != null && params.since > 0) query.set('since', String(params.since));
 		if (params?.limit) query.set('limit', String(params.limit));
-		if (params?.offset) query.set('offset', String(params.offset));
+		if (params?.offset != null && params.offset >= 0) query.set('offset', String(params.offset));
 		const qs = query.toString();
 		return this.request(`/logs${qs ? '?' + qs : ''}`);
 	}

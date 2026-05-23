@@ -151,6 +151,21 @@ opkg install /opt/tmp/awg-manager_2.6.3_aarch64-3.10-kn.ipk --force-reinstall
 
 ## 11. Проверки и тесты backend на Win11 (правильный Linux-рантайм)
 
+### Приоритет запуска (обязательно)
+
+Для backend-тестов в этом репозитории **всегда сначала использовать**:
+
+```powershell
+scripts\dev\dev-backend-tests.bat
+```
+
+И только если этот скрипт недоступен/сломался локально — использовать `docker run ... go test ...` как fallback.
+
+Порядок приоритета:
+
+1. `scripts\dev\dev-backend-tests.bat` (основной путь, приоритетный)
+2. `docker run ... go test ...` (запасной путь)
+
 ### Зачем это нужно
 
 На Win11 часть backend-тестов (особенно под Linux/Keenetic) может давать ложные падения, если запускать их:
@@ -158,9 +173,22 @@ opkg install /opt/tmp/awg-manager_2.6.3_aarch64-3.10-kn.ipk --force-reinstall
 - через WSL без установленного Go,
 - через Git Bash с `bash -lc` (login-shell может сломать `PATH` внутри контейнера).
 
-Надёжный способ: запускать тесты внутри Linux Docker-контейнера с Go.
+Надёжный способ в проекте: запускать тесты через `scripts\dev\dev-backend-tests.bat`, который уже обслуживает правильное окружение.  
+Прямой `docker run` — только запасной вариант.
 
-### Базовая команда (разовый запуск через Docker)
+### Рекомендуемые команды (через project script)
+
+Из корня репозитория:
+
+```powershell
+scripts\dev\dev-backend-tests.bat status
+scripts\dev\dev-backend-tests.bat start
+scripts\dev\dev-backend-tests.bat run ./internal/orchestrator
+scripts\dev\dev-backend-tests.bat full
+scripts\dev\dev-backend-tests.bat stop
+```
+
+### Fallback: базовая команда Docker (только если script недоступен)
 
 Из корня репозитория:
 
@@ -183,7 +211,7 @@ permission denied while trying to connect to the docker API at npipe:////./pipe/
 ok  	github.com/hoaxisr/awg-manager/internal/orchestrator	0.0xxs
 ```
 
-### Точечный запуск одного теста
+### Fallback: точечный запуск одного теста
 
 ```powershell
 docker run --rm -v "$(Get-Location):/src" -w /src golang:1.24-bullseye bash -c 'go test ./internal/orchestrator -run TestDecide_Reconnect_ASCSoftRestart_MonitoringRestartedOnce'

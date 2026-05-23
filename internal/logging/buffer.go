@@ -68,6 +68,13 @@ func (lb *LogBuffer) GetPaginated(group, subgroup, level string, since time.Time
 	return lb.inner.FilterPage(matcher(group, subgroup, level, since), limit, offset)
 }
 
+// GetPaginatedMulti returns filtered entries with pagination, newest first,
+// plus the total count of filtered entries, using multi-select group/subgroup
+// filters. Empty slices mean "no constraint" for that field.
+func (lb *LogBuffer) GetPaginatedMulti(groups, subgroups []string, level string, since time.Time, limit, offset int) ([]LogEntry, int) {
+	return lb.inner.FilterPage(matcherMulti(groups, subgroups, level, since), limit, offset)
+}
+
 // Clear removes all entries.
 func (lb *LogBuffer) Clear() { lb.inner.Clear() }
 
@@ -106,6 +113,42 @@ func matcher(group, subgroup, level string, since time.Time) func(LogEntry) bool
 		}
 		if subgroup != "" && e.Subgroup != subgroup {
 			return false
+		}
+		if level != "" && !IsVisible(Level(e.Level), Level(level)) {
+			return false
+		}
+		return true
+	}
+}
+
+func matcherMulti(groups, subgroups []string, level string, since time.Time) func(LogEntry) bool {
+	groupSet := make(map[string]struct{}, len(groups))
+	for _, g := range groups {
+		if g != "" {
+			groupSet[g] = struct{}{}
+		}
+	}
+
+	subgroupSet := make(map[string]struct{}, len(subgroups))
+	for _, s := range subgroups {
+		if s != "" {
+			subgroupSet[s] = struct{}{}
+		}
+	}
+
+	return func(e LogEntry) bool {
+		if !since.IsZero() && !e.Timestamp.After(since) {
+			return false
+		}
+		if len(groupSet) > 0 {
+			if _, ok := groupSet[e.Group]; !ok {
+				return false
+			}
+		}
+		if len(subgroupSet) > 0 {
+			if _, ok := subgroupSet[e.Subgroup]; !ok {
+				return false
+			}
 		}
 		if level != "" && !IsVisible(Level(e.Level), Level(level)) {
 			return false
