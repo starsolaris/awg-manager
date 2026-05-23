@@ -204,6 +204,20 @@
 		align-items: center;
 	}
 
+	@media (max-width: 640px) {
+		.level-header-row {
+			flex-direction: row;
+			align-items: center;
+			flex-wrap: nowrap;
+			gap: 0.75rem;
+		}
+
+		.level-header-row > *:first-child {
+			flex: 1 1 auto;
+			min-width: 0;
+		}
+	}
+
 	.level-expand-control {
 		display: inline-flex;
 		align-items: center;

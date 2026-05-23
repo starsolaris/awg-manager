@@ -325,7 +325,7 @@ func (s *GeoDataStore) UpdateWithClient(path string, client *http.Client) (*GeoF
 
 	entry := s.entries[idx]
 	if entry.External {
-		return nil, fmt.Errorf("cannot update external file managed by HydraRoute Neo — use «Взять под контроль» or update in HR Neo")
+		return nil, fmt.Errorf("cannot update external file managed by HydraRoute Neo — use «Взять под управление or update in HR Neo")
 	}
 	sourceURL := entry.URL
 	if sourceURL == "" {
@@ -495,7 +495,7 @@ func (s *GeoDataStore) GeoFilePaths() (geoIP, geoSite []string) {
 // Returns the number of files adopted.
 //
 // HR paths are marked External=true with a default Ground-Zerro URL when the
-// type is known, so "Обновить" can re-download in place. "Взять под контроль"
+// type is known, so "Обновить" can re-download in place. "Взять под управление"
 // moves the file into awg-manager/geo and clears External.
 //
 // Paths under awg-manager/geo or /opt/etc/HydraRoute are adopted in place

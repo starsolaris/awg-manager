@@ -414,7 +414,7 @@
 								disabled={busy !== null}
 								onclick={() => (pendingTakeControl = f)}
 							>
-								Взять под контроль
+								Взять под управление
 							</Button>
 						{/if}
 						{#if canUpdate(f)}
@@ -568,7 +568,7 @@
 	{@const pt = pendingTakeControl}
 	<ConfirmModal
 		open={true}
-		title="Взять под контроль"
+		title="Взять под управление"
 		message={`Перенести «${fileName(pt.path)}» в каталог awg-manager?`}
 		secondary="Файл будет перенесён из директории HydraRoute (/opt/etc/HydraRoute) и дальше управляться из AWGM. Путь в hrneo.conf обновится при синхронизации."
 		confirmLabel="Перенести"
@@ -598,9 +598,10 @@
 
 <style>
 	.geo-pane {
+		--geo-block-gap: 0.875rem;
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--geo-block-gap);
 	}
 
 	.pane-header {
@@ -731,7 +732,7 @@
 	}
 
 	.form-label-spaced {
-		margin-top: 12px;
+		margin-top: var(--geo-block-gap);
 	}
 
 	.preset-row {
@@ -750,11 +751,11 @@
 		display: grid;
 		grid-template-columns: auto 1fr auto;
 		gap: 6px;
+		align-items: center;
 	}
 
 	.route-box {
-		margin-top: 12px;
-		padding: 10px 12px;
+		padding: 12px;
 		border: 1px solid var(--border);
 		border-radius: 8px;
 		background: var(--bg-primary);
@@ -790,7 +791,7 @@
 	}
 
 	.route-status {
-		margin-top: 8px;
+		margin-top: 0.75rem;
 		padding: 8px 10px;
 		border-radius: 6px;
 		font-size: 0.8125rem;
@@ -819,7 +820,7 @@
 	}
 
 	.busy-hint {
-		margin-top: 8px;
+		margin-top: 0.75rem;
 		padding: 8px 10px;
 		background: rgba(122, 162, 247, 0.1);
 		border-left: 3px solid var(--accent);
@@ -829,7 +830,7 @@
 	}
 
 	.form-hint {
-		margin-top: 8px;
+		margin-top: 0.75rem;
 		color: var(--text-muted);
 		font-size: 0.75rem;
 	}

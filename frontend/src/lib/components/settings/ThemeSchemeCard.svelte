@@ -54,12 +54,12 @@
 	<div class="section-label">Внешний вид</div>
 	<div class="setting-row compact-layout-row">
 		<div class="flex flex-col gap-1">
-			<span class="font-medium">Компактная ширина</span>
+			<span class="font-medium">Компактный режим</span>
 			<span class="setting-description">
 				{#if compactForced}
 					В базовом режиме всегда включена: колонка 960px и меньшие боковые отступы.
 				{:else}
-					Сужает интерфейс с краев — как в версии 2.8.2 (полная поддержка не гарантирована, рекомендуется использовать только в базовом режиме).
+					Сужает интерфейс с краев как в версии 2.8.2, фокусируя внимание на центре экрана (автоматически включается в базовом режиме).
 				{/if}
 			</span>
 		</div>
@@ -80,7 +80,7 @@
 			<div class="flex flex-col gap-1">
 				<span class="font-medium">Цветовая схема</span>
 				<span class="setting-description">
-					Применяется сразу и сохраняется локально в этом браузере
+					Применяется сразу и сохраняется локально в этом браузере.
 				</span>
 			</div>
 			<span class="header-meta">
@@ -147,13 +147,6 @@
 							</div>
 						</div>
 
-						<div class="theme-foot">
-							{#if preset !== 'custom'}
-								<span class="theme-tag">Темная / Светлая</span>
-							{:else}
-								<span class="theme-tag">3 базовых цвета</span>
-							{/if}
-						</div>
 					</button>
 				{/each}
 			</div>
@@ -228,6 +221,20 @@
 <style>
 	.compact-layout-row {
 		align-items: center;
+	}
+
+	@media (max-width: 640px) {
+		.compact-layout-row {
+			flex-direction: row;
+			align-items: center;
+			flex-wrap: nowrap;
+			gap: 0.75rem;
+		}
+
+		.compact-layout-row > *:first-child {
+			flex: 1 1 auto;
+			min-width: 0;
+		}
 	}
 
 	.collapsible-header {

@@ -272,7 +272,7 @@ export const THEME_PRESETS = {
 	legacy: {
 		label: 'AWGM - Legacy',
 		summary:
-			'Классическая тема AWGM с глубокими тёмно-синими оттенками, полюбившаяся многим.',
+			'Классическая тема AWGM с глубокими тёмно-синими оттенками.',
 		supportsModeToggle: true,
 	},
 	neo: {
@@ -284,7 +284,7 @@ export const THEME_PRESETS = {
 	mint: {
 		label: 'AWGM - Mint',
 		summary:
-			'Мягкие аквамариновые тона и нейтральная серо-синяя стилистика.',
+			'Мягкая аквамариновая палитра и нейтральная серо-синяя стилистика.',
 		supportsModeToggle: true,
 	},
 	custom: {
