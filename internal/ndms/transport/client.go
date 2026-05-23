@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hoaxisr/awg-manager/internal/logging"
+	"github.com/hoaxisr/awg-manager/internal/sys/env"
 )
 
 const (
@@ -22,6 +23,11 @@ const (
 	// the router in a partially-configured state from a client-side
 	// timeout.
 	defaultTimeout = 30 * time.Second
+
+	// Default Batcher configuration (overridable via env-vars).
+	defaultBatchWindowMs = 15
+	defaultBatchMaxSize  = 64
+	defaultBatchSubmit   = 256
 )
 
 // Client is the NDMS RCI HTTP client. Every request Acquires a slot from
@@ -31,6 +37,9 @@ type Client struct {
 	baseURL string
 	sem     *Semaphore
 	appLog  *logging.ScopedLogger
+
+	// batcher coalesce'ит read-запросы в один POST. nil = legacy path.
+	batcher *Batcher
 
 	// Perftrace counters (атомарные, безлокные). Дамп раз в минуту через
 	// StartPerfDumper. ВРЕМЕННЫЕ — удалить после perf-анализа сессии 2026-05-23.
@@ -93,15 +102,34 @@ func (c *Client) StartPerfDumper(ctx context.Context, interval time.Duration) {
 // this scoped logger at debug level — visible only when log level=debug.
 func (c *Client) SetAppLogger(appLogger logging.AppLogger) {
 	c.appLog = logging.NewScopedLogger(appLogger, logging.GroupSystem, logging.SubNDMS)
+	if c.batcher != nil {
+		c.batcher.SetAppLogger(c.appLog)
+	}
 }
 
 // New constructs a production Client pointing at localhost:79/rci with
-// the default 10s timeout.
+// the default 10s timeout. Batcher is enabled by default; set
+// AWG_NDMS_BATCH=0 to disable.
 func New(sem *Semaphore) *Client {
-	return &Client{
+	c := &Client{
 		http:    &http.Client{Timeout: defaultTimeout, Transport: sharedTransport},
 		baseURL: defaultBaseURL,
 		sem:     sem,
+	}
+	if env.IntDefault("AWG_NDMS_BATCH", 1) != 0 {
+		windowMs := env.IntDefault("AWG_NDMS_BATCH_WINDOW_MS", defaultBatchWindowMs)
+		maxSize := env.IntDefault("AWG_NDMS_BATCH_MAX_SIZE", defaultBatchMaxSize)
+		submitBuf := env.IntDefault("AWG_NDMS_BATCH_SUBMIT_BUF", defaultBatchSubmit)
+		c.batcher = newBatcher(c, time.Duration(windowMs)*time.Millisecond, maxSize, submitBuf)
+		c.batcher.Start()
+	}
+	return c
+}
+
+// Close gracefully shuts down the batcher. Idempotent.
+func (c *Client) Close() {
+	if c.batcher != nil {
+		c.batcher.Close()
 	}
 }
 
@@ -214,9 +242,19 @@ func (c *Client) postJSON(ctx context.Context, payload any) (json.RawMessage, er
 	return json.RawMessage(data), nil
 }
 
-// GetRaw performs GET {baseURL}{path} and returns the raw body bytes.
-// On success no log entry is emitted; every failure path is logged at Error.
+// GetRaw делегирует в Batcher (по умолчанию). Если batcher отключён или
+// nil — fallback на legacy direct GET.
 func (c *Client) GetRaw(ctx context.Context, path string) ([]byte, error) {
+	if c.batcher != nil {
+		return c.batcher.Submit(ctx, path)
+	}
+	return c.getRawDirect(ctx, path)
+}
+
+// getRawDirect — legacy single-GET path. Используется когда Batcher
+// отключён через AWG_NDMS_BATCH=0, либо в Client'ах без batcher'а
+// (тесты через NewWithURL). Сохраняет существующие perf-counters.
+func (c *Client) getRawDirect(ctx context.Context, path string) ([]byte, error) {
 	start := time.Now()
 	defer c.recordPerf(start, "GET", path)
 	if err := c.sem.Acquire(ctx); err != nil {
