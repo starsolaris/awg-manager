@@ -252,6 +252,7 @@ func main() {
 	ndmsSem := ndmstransport.NewSemaphore(env.IntDefault("AWG_NDMS_CAP", 30))
 	ndmsTransportClient := ndmstransport.New(ndmsSem)
 	ndmsTransportClient.SetAppLogger(loggingService)
+	defer ndmsTransportClient.Close() // graceful batcher shutdown — финальный flush pending'а
 	// ВРЕМЕННЫЙ perf-dumper: раз в минуту печатает RCI counters в app-log.
 	// Удалить после анализа perf-сессии 2026-05-23.
 	ndmsTransportClient.StartPerfDumper(context.Background(), time.Minute)
