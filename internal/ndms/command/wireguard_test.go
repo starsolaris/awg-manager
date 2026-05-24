@@ -37,12 +37,34 @@ const realImportSuccess = `{
 func TestImportWireguardConfig_Success_ReturnsCreated(t *testing.T) {
 	c := NewWireguardCommands(&respPoster{body: realImportSuccess}, nil, nil)
 
-	name, err := c.ImportWireguardConfig(context.Background(), []byte("conf"), "x.conf")
+	res, err := c.ImportWireguardConfig(context.Background(), []byte("conf"), "x.conf")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if name != "Wireguard3" {
-		t.Errorf("created name: want Wireguard3, got %q", name)
+	if res.Created != "Wireguard3" {
+		t.Errorf("created name: want Wireguard3, got %q", res.Created)
+	}
+}
+
+func TestImportWireguardConfig_Success_PreservesIntersectAndMessages(t *testing.T) {
+	// Importing a config whose keys collide with an existing interface still
+	// creates a new one, but the router reports the collision in intersects.
+	// The caller must not lose that context.
+	body := `{"interface":{"wireguard":{"import":{"intersects":"Wireguard3","created":"Wireguard4","status":[{"status":"message","code":"75507472","ident":"Wireguard::Interface","message":"\"Wireguard4\": imported settings."}]}}}}`
+	c := NewWireguardCommands(&respPoster{body: body}, nil, nil)
+
+	res, err := c.ImportWireguardConfig(context.Background(), []byte("conf"), "x.conf")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Created != "Wireguard4" {
+		t.Errorf("created: want Wireguard4, got %q", res.Created)
+	}
+	if res.Intersects != "Wireguard3" {
+		t.Errorf("intersects: want Wireguard3, got %q", res.Intersects)
+	}
+	if len(res.Messages) != 1 || !strings.Contains(res.Messages[0], "imported settings") {
+		t.Errorf("messages: want one 'imported settings', got %v", res.Messages)
 	}
 }
 
