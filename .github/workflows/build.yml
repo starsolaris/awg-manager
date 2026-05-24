@@ -43,11 +43,48 @@ jobs:
           path: frontend/build
           if-no-files-found: error
 
+  version:
+    name: Resolve IPK version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ipk_version: ${{ steps.resolve.outputs.ipk_version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Resolve revision for current patch
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          REV=1
+          PREV=""
+
+          mkdir -p /tmp/prev-release
+          if gh release download latest --dir /tmp/prev-release --pattern VERSION 2>/dev/null \
+            && [[ -f /tmp/prev-release/VERSION ]]; then
+            PREV="$(tr -d '[:space:]' < /tmp/prev-release/VERSION)"
+            esc="${VERSION//./\\.}"
+            if [[ "$PREV" =~ ^${esc}\+r([0-9]+)$ ]]; then
+              REV=$((BASH_REMATCH[1] + 1))
+            fi
+          fi
+
+          IPK_VERSION="${VERSION}+r${REV}"
+          echo "Resolved ${IPK_VERSION} (previous: ${PREV:-none})"
+          echo "ipk_version=${IPK_VERSION}" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build (${{ matrix.arch }})
     runs-on: ubuntu-latest
     needs:
       - frontend
+      - version
     timeout-minutes: 120
     strategy:
       fail-fast: true
@@ -126,8 +163,7 @@ jobs:
             exit 1
           fi
 
-          BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
-          IPK_VERSION="$(cat VERSION)+r${BUILD_NUMBER}"
+          IPK_VERSION="${{ needs.version.outputs.ipk_version }}"
           printf '%s\n' "$IPK_VERSION" > dist/VERSION
 
           SKIP_FRONTEND_BUILD=1 ./scripts/build-ipk.sh "$IPK_VERSION" "${{ matrix.arch }}"
