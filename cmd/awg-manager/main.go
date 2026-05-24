@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net"
@@ -577,6 +578,10 @@ func main() {
 
 	// Access policy service (NDMS ip policy management) — wired to CQRS layer.
 	accessPolicySvc := accesspolicy.New(ndmsCommands.Policies, ndmsCommands.Interfaces, ndmsQueries, settingsStore, loggingService, ndmsquery.NewPolicyMarkStore(ndmsTransportClient, nil))
+	// Route SetInterfaceUp for managed tunnels through the orchestrator
+	// lifecycle (NativeWG needs kmod proxy + endpoint rewrite, not a raw NDMS
+	// flip — issue #183). System interfaces keep the raw flip.
+	accessPolicySvc.SetTunnelLifecycle(orchLifecycleAdapter{orch}, storeManagedTunnelResolver{awgStore})
 
 	// HydraRoute NDMS wiring — now that ndmsCommands/Queries are ready.
 	hydraService.SetQueries(ndmsQueries)
@@ -1874,6 +1879,45 @@ func (s *monitoringSystemTunnelAdapter) List(ctx context.Context) ([]monitoring.
 		})
 	}
 	return out, nil
+}
+
+// orchLifecycleAdapter routes accesspolicy.SetInterfaceUp for managed tunnels
+// to the orchestrator lifecycle (full start/stop incl. NativeWG kmod proxy).
+type orchLifecycleAdapter struct{ orch *orchestrator.Orchestrator }
+
+func (a orchLifecycleAdapter) Start(ctx context.Context, id string) error {
+	err := a.orch.HandleEvent(ctx, orchestrator.Event{Type: orchestrator.EventStart, Tunnel: id})
+	if errors.Is(err, tunnel.ErrAlreadyRunning) {
+		return nil // already running — user's "on" intent fulfilled
+	}
+	return err
+}
+
+func (a orchLifecycleAdapter) Stop(ctx context.Context, id string) error {
+	return a.orch.HandleEvent(ctx, orchestrator.Event{Type: orchestrator.EventStop, Tunnel: id})
+}
+
+// storeManagedTunnelResolver maps an NDMS interface name to a managed tunnel
+// ID by scanning the AWG tunnel store. ok=false for plain system interfaces.
+type storeManagedTunnelResolver struct{ store *storage.AWGTunnelStore }
+
+func (r storeManagedTunnelResolver) ManagedTunnelByNDMSName(_ context.Context, ndmsName string) (string, bool) {
+	tunnels, err := r.store.List()
+	if err != nil {
+		return "", false
+	}
+	for _, t := range tunnels {
+		var nm string
+		if t.Backend == "nativewg" {
+			nm = nwg.NewNWGNames(t.NWGIndex).NDMSName
+		} else {
+			nm = tunnel.NewNames(t.ID).NDMSName
+		}
+		if nm != "" && nm == ndmsName {
+			return t.ID, true
+		}
+	}
+	return "", false
 }
 
 // operatorLifecycle adapts *singbox.Operator to installer.Lifecycle so
