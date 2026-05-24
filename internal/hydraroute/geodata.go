@@ -474,7 +474,7 @@ func (s *GeoDataStore) GetTags(path string) ([]GeoTag, error) {
 	return result, nil
 }
 
-// GeoFilePaths returns the tracked file paths grouped by type.
+// GeoFilePaths returns tracked paths for hrneo.conf sync (deduped, stable order).
 func (s *GeoDataStore) GeoFilePaths() (geoIP, geoSite []string) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -487,7 +487,7 @@ func (s *GeoDataStore) GeoFilePaths() (geoIP, geoSite []string) {
 			geoSite = append(geoSite, e.Path)
 		}
 	}
-	return geoIP, geoSite
+	return dedupeGeoPaths(geoIP), dedupeGeoPaths(geoSite)
 }
 
 // AdoptExternalFiles scans the provided hrneo config for GeoSite/GeoIP file
@@ -565,11 +565,10 @@ func (s *GeoDataStore) AdoptExternalFiles(cfg *Config) (int, error) {
 		adopted++
 	}
 
-	if adopted == 0 {
-		return 0, nil
-	}
-	if err := s.saveUnlocked(); err != nil {
-		return adopted, fmt.Errorf("save adopted entries: %w", err)
+	if s.reconcileUnlocked() || adopted > 0 {
+		if err := s.saveUnlocked(); err != nil {
+			return adopted, fmt.Errorf("save adopted entries: %w", err)
+		}
 	}
 	return adopted, nil
 }
@@ -589,7 +588,12 @@ func (s *GeoDataStore) load() error {
 		return fmt.Errorf("parse %s: %w", s.storagePath, err)
 	}
 
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.entries = doc.Files
+	if s.reconcileUnlocked() {
+		_ = s.saveUnlocked()
+	}
 	return nil
 }
 
