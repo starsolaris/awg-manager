@@ -19,6 +19,7 @@
 		ThemeSchemeCard,
 		SettingsFooter,
 		UsageLevelCard,
+		DevelopChannelGateModal,
 	} from "$lib/components/settings";
 	import { setSettings as setGlobalSettings } from "$lib/stores/settings";
 	import {
@@ -38,6 +39,7 @@
 		isAppearanceSettingsVisible,
 		isSectionVisible,
 		isRoutingSubTabVisible,
+		isUpdateChannelSwitchVisible,
 		type UsageLevel,
 	} from "$lib/types/usageLevel";
 	import { usageLevel } from "$lib/stores/settings";
@@ -69,6 +71,7 @@
 	let systemInfoRefreshing = $state(false);
 	let systemInfoUpdatedAt = $state<string | null>(null);
 	let systemInfoInFlight: Promise<void> | null = null;
+	let developGateOpen = $state(false);
 
 	const singboxStatusValue = $derived($singboxStatus.data ?? null);
 	const singboxStatusLoading = $derived(
@@ -452,6 +455,15 @@ onMount(() => {
 		}
 	}
 
+	function requestChannel(channel: 'stable' | 'develop') {
+		if (!settings || settings.updates.channel === channel) return;
+		if (channel === 'develop') {
+			developGateOpen = true;
+			return;
+		}
+		void selectChannel('stable');
+	}
+
 	async function selectChannel(channel: 'stable' | 'develop') {
 		if (!settings || settings.updates.channel === channel) return;
 		saving = true;
@@ -466,13 +478,18 @@ onMount(() => {
 			notifications.success(
 				channel === 'develop'
 					? 'Канал обновлений: develop (нестабильный)'
-					: 'Канал обновлений: стабильный',
+					: 'Канал обновлений изменён на стабильный',
 			);
 		} catch {
 			notifications.error('Ошибка смены канала обновлений');
 		} finally {
 			saving = false;
 		}
+	}
+
+	async function confirmDevelopChannel() {
+		developGateOpen = false;
+		await selectChannel('develop');
 	}
 
 	async function selectUsageLevel(level: UsageLevel) {
@@ -673,34 +690,36 @@ onMount(() => {
 							disabled={saving}
 						/>
 					</div>
-					<div class="setting-row toggle-inline-row">
-						<div class="flex flex-col gap-1">
-							<span class="font-medium">Канал обновлений</span>
-							<span class="setting-description">
-								develop — свежие, потенциально нестабильные сборки из ветки разработки.
-							</span>
+					{#if isUpdateChannelSwitchVisible(settings.usageLevel)}
+						<div class="setting-row toggle-inline-row">
+							<div class="flex flex-col gap-1">
+								<span class="font-medium">Канал обновлений</span>
+								<span class="setting-description">
+									develop — свежие, потенциально нестабильные сборки из ветки разработки.
+								</span>
+							</div>
+							<div class="channel-switch">
+								<button
+									type="button"
+									class="channel-option"
+									class:active={settings.updates.channel === 'stable'}
+									disabled={saving}
+									onclick={() => requestChannel('stable')}
+								>
+									Стабильный
+								</button>
+								<button
+									type="button"
+									class="channel-option"
+									class:active={settings.updates.channel === 'develop'}
+									disabled={saving}
+									onclick={() => requestChannel('develop')}
+								>
+									Канал разработки
+								</button>
+							</div>
 						</div>
-						<div class="channel-switch">
-							<button
-								type="button"
-								class="channel-option"
-								class:active={settings.updates.channel === 'stable'}
-								disabled={saving}
-								onclick={() => selectChannel('stable')}
-							>
-								Стабильный
-							</button>
-							<button
-								type="button"
-								class="channel-option"
-								class:active={settings.updates.channel === 'develop'}
-								disabled={saving}
-								onclick={() => selectChannel('develop')}
-							>
-								Develop
-							</button>
-						</div>
-					</div>
+					{/if}
 				</div>
 
 				<div class="card">
@@ -871,6 +890,13 @@ onMount(() => {
 		</div>
 		</div>
 	{/if}
+
+	<DevelopChannelGateModal
+		open={developGateOpen}
+		busy={saving}
+		onclose={() => (developGateOpen = false)}
+		onpassed={confirmDevelopChannel}
+	/>
 
 	<ConfirmModal
 		open={ndmsProxyConfirmOpen}

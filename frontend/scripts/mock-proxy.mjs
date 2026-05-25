@@ -49,6 +49,8 @@ const VALID = new Set(['basic', 'advanced', 'expert']);
 let usageLevel = 'expert';
 let singboxLogLevel = 'trace';
 let downloadRouteTag = 'direct';
+let updateChannel = 'stable';
+let updateCheckEnabled = true;
 const MOCK_DOWNLOAD_OUTBOUNDS = [
 	{
 		tag: 'direct',
@@ -2444,6 +2446,11 @@ const server = http.createServer(async (req, res) => {
 					body.data.download = {};
 				}
 				body.data.download.routeTag = downloadRouteTag;
+				if (!body.data.updates || typeof body.data.updates !== 'object') {
+					body.data.updates = { checkEnabled: true, channel: 'stable' };
+				}
+				body.data.updates.channel = updateChannel;
+				body.data.updates.checkEnabled = updateCheckEnabled;
 			}
 			send(res, status, body);
 		});
@@ -2493,6 +2500,19 @@ const server = http.createServer(async (req, res) => {
 				) {
 					downloadRouteTag = payload.download.routeTag;
 				}
+				if (
+					payload &&
+					typeof payload === 'object' &&
+					payload.updates &&
+					typeof payload.updates === 'object'
+				) {
+					if (payload.updates.channel === 'stable' || payload.updates.channel === 'develop') {
+						updateChannel = payload.updates.channel;
+					}
+					if (typeof payload.updates.checkEnabled === 'boolean') {
+						updateCheckEnabled = payload.updates.checkEnabled;
+					}
+				}
 				const { status, body } = await fetchJSON('/settings/get');
 				if (body && typeof body === 'object' && body.data) {
 					body.data.usageLevel = usageLevel;
@@ -2504,9 +2524,16 @@ const server = http.createServer(async (req, res) => {
 						body.data.download = {};
 					}
 					body.data.download.routeTag = downloadRouteTag;
+					if (!body.data.updates || typeof body.data.updates !== 'object') {
+						body.data.updates = { checkEnabled: true, channel: 'stable' };
+					}
+					body.data.updates.channel = updateChannel;
+					body.data.updates.checkEnabled = updateCheckEnabled;
 				}
 				send(res, status, body);
-				console.log(`[mock-proxy] usageLevel → ${usageLevel}, singboxLogLevel → ${singboxLogLevel}, downloadRouteTag → ${downloadRouteTag}`);
+				console.log(
+					`[mock-proxy] usageLevel → ${usageLevel}, singboxLogLevel → ${singboxLogLevel}, downloadRouteTag → ${downloadRouteTag}, updateChannel → ${updateChannel}`,
+				);
 			} catch (e) {
 				send(res, 500, { success: false, error: String(e) });
 			}
