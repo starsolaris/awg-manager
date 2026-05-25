@@ -738,7 +738,7 @@ onMount(() => {
 							<button
 								type="button"
 								class="channel-option"
-								class:active={settings.updates.channel !== 'develop'}
+								class:active={settings.updates.channel === 'stable'}
 								disabled={saving}
 								onclick={() => selectChannel('stable')}
 							>
