@@ -10,7 +10,6 @@
 	import { parseHeadersText, serializeHeaders } from './headersParser';
 	import { Button, Dropdown, Modal, Toggle } from '$lib/components/ui';
 	import { untrack } from 'svelte';
-	import DownloadRouteNote from '$lib/components/downloads/DownloadRouteNote.svelte';
 
 	interface Props {
 		subscription: Subscription;
@@ -150,7 +149,6 @@
 				</div>
 			</div>
 		{:else}
-			<DownloadRouteNote text="URL-подписка обновляется через" />
 			<label class="row">
 				<span class="lbl">URL</span>
 				<input class="inp" bind:value={url} />
