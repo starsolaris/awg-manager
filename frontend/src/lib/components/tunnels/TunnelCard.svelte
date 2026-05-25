@@ -1671,7 +1671,8 @@
 		padding: 0 12px 4px;
 	}
 
-	@media (max-width: 400px) {
+	@media (max-width: 720px) {
+		.card.view-list .actions,
 		.actions {
 			display: grid;
 			grid-template-columns: repeat(3, minmax(0, 1fr));

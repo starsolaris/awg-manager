@@ -337,7 +337,7 @@
         <div class="section-buttons">
             <StoreStatusBadge store={dnsRoutesStore} />
             {#if dnsRoutes.length > 0}
-                <Button variant="secondary" size="sm" onclick={() => { dnsSelectionMode = true; dnsSelected = new Set(); }} disabled={bodyLoading}>Выбрать</Button>
+                <Button variant="ghost" size="sm" onclick={() => { dnsSelectionMode = true; dnsSelected = new Set(); }} disabled={bodyLoading}>Выбрать</Button>
             {/if}
             <div class="dropdown-wrapper">
                 <Button variant="primary" size="sm" disabled={bodyLoading} onclick={(e) => { e.stopPropagation(); addMenuOpen = !addMenuOpen; }}>
@@ -641,15 +641,6 @@
         padding: 4px;
     }
 
-    @media (max-width: 480px) {
-        .dropdown-menu {
-            right: auto;
-            left: 0;
-            min-width: min(210px, calc(100vw - 32px));
-            max-width: calc(100vw - 32px);
-        }
-    }
-
     .dropdown-item {
         display: flex;
         align-items: center;
@@ -711,7 +702,13 @@
 
         .section-buttons :global(.btn) {
             width: 100%;
+            min-height: 28px;
             justify-content: center;
+        }
+
+        .dropdown-wrapper {
+            position: relative;
+            overflow: visible;
         }
     }
 </style>

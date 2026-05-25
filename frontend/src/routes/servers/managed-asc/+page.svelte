@@ -508,6 +508,9 @@
 		margin-top: 4px;
 	}
 
+	.gen-label-mobile {
+		display: none;
+	}
 
 	@media (max-width: 640px) {
 		.header-actions {
@@ -522,18 +525,14 @@
 			min-width: 0;
 		}
 
-	.header-actions :global(.btn:last-child) {
-		grid-column: 1 / -1;
-	}
+		.header-actions :global(.btn:last-child) {
+			grid-column: 1 / -1;
+		}
 
-	.gen-label-mobile {
-		display: none;
-	}
-
-	.inline-row-2,
-	.inline-row-3 {
-		grid-template-columns: auto 1fr;
-	}
+		.inline-row-2,
+		.inline-row-3 {
+			grid-template-columns: auto 1fr;
+		}
 
 		.sticky-header {
 			flex-direction: column;

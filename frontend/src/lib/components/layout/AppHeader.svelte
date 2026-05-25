@@ -604,12 +604,14 @@
 
 		.mobile-nav-link {
 			padding: 0.75rem var(--header-gutter-x);
+			border-left: 3px solid transparent;
 			color: var(--color-text-secondary);
 			font-size: 0.9375rem;
 			text-decoration: none;
 			transition:
 				background var(--t-fast) ease,
-				color var(--t-fast) ease;
+				color var(--t-fast) ease,
+				border-color var(--t-fast) ease;
 		}
 
 		.mobile-nav-link:hover {

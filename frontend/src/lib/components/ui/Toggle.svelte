@@ -46,10 +46,10 @@
                     </span>
                 </span>
             {:else}
+                <span class="toggle-slider"></span>
                 <span class="toggle-spinner-slot" aria-hidden="true">
                     {#if loading}<span class="toggle-spinner"></span>{/if}
                 </span>
-                <span class="toggle-slider"></span>
             {/if}
         </label>
         <div class="toggle-text">
@@ -71,10 +71,10 @@
                 </span>
             </span>
         {:else}
+            <span class="toggle-slider"></span>
             <span class="toggle-spinner-slot" aria-hidden="true">
                 {#if loading}<span class="toggle-spinner"></span>{/if}
             </span>
-            <span class="toggle-slider"></span>
         {/if}
     </label>
 {/if}

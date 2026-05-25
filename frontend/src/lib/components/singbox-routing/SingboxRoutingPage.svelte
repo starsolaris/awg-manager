@@ -243,13 +243,19 @@
 	.sub-content {
 		margin-top: 1rem;
 	}
-	@media (max-width: 720px) {
+	@media (max-width: 700px) {
 		.header-actions {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			align-items: stretch;
+			gap: 0.5rem;
 			width: 100%;
 		}
 		.header-actions :global(.btn) {
-			flex: 1 1 0;
+			width: 100%;
+			min-height: 28px;
 			min-width: 0;
+			justify-content: center;
 		}
 	}
 </style>

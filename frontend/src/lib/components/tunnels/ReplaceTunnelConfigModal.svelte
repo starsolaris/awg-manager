@@ -356,10 +356,11 @@
     }
 
     .file-drop-zone {
+        margin-top: 1rem;
         min-height: 140px;
         border: 2px dashed var(--border);
         border-top: 2px dashed var(--border);
-        border-radius: 0 0 8px 8px;
+        border-radius: 8px;
         display: flex;
         align-items: center;
         justify-content: center;

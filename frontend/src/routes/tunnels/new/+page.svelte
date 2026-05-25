@@ -460,14 +460,13 @@
 		</svg>
 		Назад
 	</a>
-	<h1 class="page-title">Новый туннель</h1>
+	<h2 class="page-title">Новый туннель</h2>
 </div>
 
 <div class="import-container">
 	<label class="field-label" for="import-name">Название туннеля</label>
 	<div class="top-row">
 		<input type="text" id="import-name" class="name-input" bind:value={importName} placeholder="Мой VPN">
-		<!-- TODO Phase 1: button needs to match 42px name-input height (size="md" is 32px) -->
 		<div class="btn-import-wrap">
 			<Button variant="primary" size="md" onclick={handleImport} disabled={!importContent.trim()} loading={loading}>
 				Импортировать
@@ -747,7 +746,7 @@ AllowedIPs = 0.0.0.0/0"
 
 	.top-row {
 		display: flex;
-		align-items: stretch;
+		align-items: center;
 		gap: 12px;
 		margin-bottom: 1.5rem;
 	}
@@ -755,6 +754,7 @@ AllowedIPs = 0.0.0.0/0"
 	.name-input {
 		flex: 1;
 		min-width: 0;
+		box-sizing: border-box;
 		height: 42px;
 		padding: 0 12px;
 		font-size: 14px;
@@ -772,13 +772,17 @@ AllowedIPs = 0.0.0.0/0"
 
 	.btn-import-wrap {
 		display: flex;
-		align-items: stretch;
+		align-items: center;
 		flex-shrink: 0;
 	}
 
-	.btn-import-wrap :global(.btn) {
+	.btn-import-wrap :global(.btn.size-md) {
+		box-sizing: border-box;
 		height: 42px;
-		padding: 0 24px;
+		min-height: 42px;
+		max-height: 42px;
+		padding-block: 0;
+		padding-inline: 24px;
 		font-size: 14px;
 	}
 
@@ -845,10 +849,11 @@ AllowedIPs = 0.0.0.0/0"
 	}
 
 	.file-drop-zone {
+		margin-top: 1rem;
 		min-height: 220px;
 		border: 2px dashed var(--color-border);
 		border-top: 2px dashed var(--color-border);
-		border-radius: 0 0 8px 8px;
+		border-radius: 8px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -907,7 +912,7 @@ AllowedIPs = 0.0.0.0/0"
 
 	.vpn-paste-input {
 		min-height: 100px;
-		border-radius: 8px;
+		border-radius: 0 0 8px 8px;
 		margin-bottom: 0;
 	}
 
@@ -1099,18 +1104,45 @@ AllowedIPs = 0.0.0.0/0"
 		flex-shrink: 0;
 	}
 
-	@media (max-width: 500px) {
+	@media (max-width: 640px) {
 		.top-row {
 			flex-direction: column;
 			align-items: stretch;
 		}
 
 		.name-input {
+			width: 100%;
 			max-width: none;
 		}
 
 		.btn-import-wrap {
-			align-self: flex-start;
+			width: 100%;
+		}
+
+		.btn-import-wrap :global(.btn.size-md) {
+			width: 100%;
+		}
+
+		.tabs {
+			flex-direction: column;
+			align-items: stretch;
+			gap: 6px;
+			border-bottom: none;
+			margin-bottom: 4px;
+		}
+
+		.tab {
+			width: 100%;
+			justify-content: flex-start;
+			margin-bottom: 0;
+			border: 1px solid var(--color-border);
+			border-radius: var(--radius-sm);
+		}
+
+		.tab-active {
+			background: var(--color-accent-tint);
+			border-color: var(--color-accent);
+			border-bottom-color: var(--color-accent);
 		}
 
 		.backend-options {

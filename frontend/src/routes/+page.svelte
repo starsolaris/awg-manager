@@ -1236,7 +1236,7 @@
 					<Button variant="secondary" size="md" onclick={handleExportAll} disabled={exporting} iconBefore={exportIcon}>
 						Экспорт
 					</Button>
-					<Button variant="primary" size="md" href="/tunnels/new" iconBefore={createIcon}>
+					<Button variant="primary" size="md" onclick={() => goto('/tunnels/new')} iconBefore={createIcon}>
 						Создать
 					</Button>
 				</div>
@@ -2212,22 +2212,43 @@
 		gap: 0.5rem;
 	}
 
+	.toolbar-actions :global(.btn.size-md) {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		box-sizing: border-box;
+		height: 32px;
+		min-height: 32px;
+		max-height: 32px;
+		padding-block: 0;
+	}
+
+	.toolbar-actions :global(.btn.variant-primary:hover:not(:disabled):not(.is-disabled)) {
+		background: transparent;
+		color: var(--color-accent);
+		border-color: var(--color-accent);
+		filter: none;
+	}
+
 	.view-mode-switch {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
-		padding: 0.1875rem;
+		box-sizing: border-box;
+		height: 32px;
+		padding: 2px;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-sm);
 		background: var(--color-bg-secondary);
+		flex-shrink: 0;
 	}
 
 	.view-mode-btn {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 2rem;
-		height: 2rem;
+		width: 28px;
+		height: 26px;
 		padding: 0;
 		border: none;
 		border-radius: calc(var(--radius-sm) - 2px);
@@ -3284,12 +3305,20 @@
 		.toolbar-actions {
 			display: grid;
 			grid-template-columns: repeat(2, minmax(0, 1fr));
+			align-items: stretch;
 			gap: 0.5rem;
 			width: 100%;
 		}
 
+		.toolbar-actions .view-mode-switch {
+			grid-column: 1 / -1;
+			width: 100%;
+			justify-content: center;
+		}
+
 		.toolbar-actions :global(.btn) {
 			width: 100%;
+			min-height: 32px;
 		}
 	}
 </style>

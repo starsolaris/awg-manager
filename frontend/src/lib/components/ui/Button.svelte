@@ -116,8 +116,10 @@
     align-items: center;
     justify-content: center;
     gap: 0.4375rem;
+    box-sizing: border-box;
     font-family: inherit;
     font-weight: 500;
+    line-height: 1;
     border-radius: var(--radius-sm);
     border: 1px solid transparent;
     cursor: pointer;
@@ -126,46 +128,26 @@
     text-decoration: none;
     user-select: none;
     white-space: nowrap;
+    vertical-align: middle;
   }
 
-  .btn.has-icon-before,
-  .btn.has-icon-after {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
+  button.btn {
+    margin: 0;
+    appearance: none;
+  }
+
+  .btn .label {
+    display: inline-flex;
     align-items: center;
-    column-gap: 0.4375rem;
-  }
-
-  .btn.has-icon-before {
-    padding-left: 0.625rem;
-    padding-right: 0.625rem;
-  }
-
-  .btn.has-icon-after {
-    padding-left: 0.625rem;
-    padding-right: 0.625rem;
+    line-height: 1;
   }
 
   .btn .icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
     pointer-events: none;
-  }
-
-  .btn .icon-before {
-    grid-column: 1;
-    justify-self: start;
-  }
-
-  .btn .icon-after {
-    grid-column: 3;
-    justify-self: end;
-  }
-
-  .btn .label {
-    grid-column: 2;
-    text-align: center;
   }
 
   .btn.full-width { width: 100%; }
@@ -174,12 +156,18 @@
 
   .size-sm {
     height: 28px;
-    padding: 0 0.625rem;
+    min-height: 28px;
+    max-height: 28px;
+    padding-block: 0;
+    padding-inline: 0.625rem;
     font-size: 12px;
   }
   .size-md {
     height: 32px;
-    padding: 0 0.875rem;
+    min-height: 32px;
+    max-height: 32px;
+    padding-block: 0;
+    padding-inline: 0.875rem;
     font-size: 13px;
   }
 
@@ -211,8 +199,8 @@
   }
 
   .variant-danger {
-    background: #ef4444;
-    color: #ffffff;
+    background: var(--color-error);
+    color: var(--color-error-contrast, #ffffff);
   }
   .variant-danger:hover:not(:disabled):not(.is-disabled) {
     filter: brightness(1.1);
@@ -228,12 +216,12 @@
 
   .variant-outline-danger {
     background: transparent;
-    color: #ef4444;
-    border-color: color-mix(in srgb, #ef4444 45%, transparent);
+    color: var(--color-error);
+    border-color: var(--color-error-border);
   }
   .variant-outline-danger:hover:not(:disabled):not(.is-disabled) {
-    background: color-mix(in srgb, #ef4444 14%, transparent);
-    border-color: #ef4444;
+    background: var(--color-error-tint);
+    border-color: var(--color-error);
   }
 
   .variant-outline-primary {

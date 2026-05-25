@@ -257,8 +257,14 @@
     @media (max-width: 768px) {
         .policy-tab--edit,
         .policy-tab--list {
-            height: calc(100dvh - 11rem);
-            max-height: calc(100dvh - 11rem);
+            height: auto;
+            max-height: none;
+            overflow: visible;
+        }
+
+        .policy-list-scroll {
+            flex: none;
+            overflow-y: visible;
         }
     }
 
@@ -276,6 +282,7 @@
 
         .section-buttons :global(.btn) {
             width: 100%;
+            min-height: 28px;
             justify-content: center;
         }
     }
