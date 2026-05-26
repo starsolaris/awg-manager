@@ -153,7 +153,7 @@
 					if (resolverStrategy) built.domain_resolver.strategy = resolverStrategy;
 				}
 			}
-			if (detour) built.detour = detour;
+			if (type !== 'local' && detour) built.detour = detour;
 			if (strategy) built.domain_strategy = strategy;
 
 			await onSave(built);
@@ -211,19 +211,21 @@
 		<section class="form-section">
 			<div class="section-label">Маршрутизация</div>
 
-			<label class="field">
-				<div class="lbl">Detour (outbound)</div>
-				<Dropdown bind:value={detour} options={detourOptions} fullWidth />
-				<div class="hint">
-					{#if server}
-						Через какой outbound сам сервер отправляет запросы. <code>direct</code> — через провайдера,
-						выбранный туннель — через VPN (шифрованный DNS без утечек).
-					{:else}
-						Через какой outbound сам сервер отправляет запросы.
-						Выбранный туннель — через VPN (шифрованный DNS без утечек).
-					{/if}
-				</div>
-			</label>
+			{#if type !== 'local'}
+				<label class="field">
+					<div class="lbl">Detour (outbound)</div>
+					<Dropdown bind:value={detour} options={detourOptions} fullWidth />
+					<div class="hint">
+						{#if server}
+							Через какой outbound сам сервер отправляет запросы. <code>direct</code> — через провайдера,
+							выбранный туннель — через VPN (шифрованный DNS без утечек).
+						{:else}
+							Через какой outbound сам сервер отправляет запросы.
+							Выбранный туннель — через VPN (шифрованный DNS без утечек).
+						{/if}
+					</div>
+				</label>
+			{/if}
 
 			<label class="field">
 				<div class="lbl">Стратегия (IPv4/IPv6)</div>
