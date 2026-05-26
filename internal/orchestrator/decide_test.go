@@ -22,17 +22,18 @@ func TestDecide_Boot_StartsEnabledKernelTunnels(t *testing.T) {
 	assertNoActionForTunnel(t, actions, "awg2", ActionColdStartKernel)
 }
 
-func TestDecide_Boot_StartsNativeWGWithoutASC(t *testing.T) {
+func TestDecide_Boot_ReconcilesNativeWGWithoutASC(t *testing.T) {
 	s := newState()
 	s.supportsASC = false
 	s.tunnels["awg0"] = &tunnelState{ID: "awg0", Backend: "nativewg", Enabled: true, NWGIndex: 0}
 
 	actions := decide(Event{Type: EventBoot}, &s)
 
-	stops := filterActions(actions, ActionStopNativeWG)
-	starts := filterActions(actions, ActionStartNativeWG)
-	if len(stops) != 1 || len(starts) != 1 {
-		t.Errorf("expected Stop+Start for NativeWG without ASC, got %d stops, %d starts", len(stops), len(starts))
+	if n := len(filterActions(actions, ActionReconcileNativeWG)); n != 1 {
+		t.Errorf("expected 1 ReconcileNativeWG for non-ASC nativewg, got %d", n)
+	}
+	if n := len(filterActions(actions, ActionStopNativeWG)); n != 0 {
+		t.Errorf("boot must NOT Stop a nativewg tunnel (Stop+Start churns NDMS edges → race), got %d stops", n)
 	}
 }
 

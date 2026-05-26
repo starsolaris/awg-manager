@@ -50,10 +50,12 @@ func decideBoot(state *State) []Action {
 
 		case "nativewg":
 			if !state.supportsASC {
-				actions = append(actions,
-					Action{Type: ActionStopNativeWG, Tunnel: t.ID},
-					Action{Type: ActionStartNativeWG, Tunnel: t.ID},
-				)
+				// Reconcile-to-desired instead of unconditional Stop+Start:
+				// the executor skips the disruptive restart when the tunnel
+				// is already running WITH a handshake, and still re-attaches
+				// the proxy for the #183 case (NDMS brought the interface up
+				// without our kmod proxy → conf=running but no handshake).
+				actions = append(actions, Action{Type: ActionReconcileNativeWG, Tunnel: t.ID})
 				actions = appendPostStartActions(actions, t)
 			}
 		}

@@ -339,7 +339,7 @@ func (o *Orchestrator) updateState(action Action) {
 	}
 
 	switch action.Type {
-	case ActionColdStartKernel, ActionStartNativeWG, ActionReconcileKernel, ActionResumeKernel:
+	case ActionColdStartKernel, ActionStartNativeWG, ActionReconcileNativeWG, ActionReconcileKernel, ActionResumeKernel:
 		t.Running = true
 		t.quiescentUntil = o.nowFn().Add(bootQuiescenceWindow)
 		// Refresh ActiveWAN from store. Execute layer persists the resolved
@@ -367,7 +367,7 @@ func (o *Orchestrator) updateState(action Action) {
 	// Publish SSE event
 	if o.bus != nil && t != nil {
 		switch action.Type {
-		case ActionColdStartKernel, ActionStartNativeWG, ActionReconcileKernel, ActionResumeKernel:
+		case ActionColdStartKernel, ActionStartNativeWG, ActionReconcileNativeWG, ActionReconcileKernel, ActionResumeKernel:
 			// tunnel:state is still consumed internally by
 			// connectivity.Monitor (listens for "running" to trigger an
 			// immediate check). Keep it until that dependency is
