@@ -50,6 +50,28 @@ func TestDNSRewriteStoreCRUD(t *testing.T) {
 	}
 }
 
+func TestDNSRewriteStoreMoveForward(t *testing.T) {
+	s := NewDNSRewriteStore(filepath.Join(t.TempDir(), "dns-rewrites.json"))
+	_ = s.Add(dnsrewrite.DNSRewrite{Pattern: "a", IPs: []string{"1.1.1.1"}})
+	_ = s.Add(dnsrewrite.DNSRewrite{Pattern: "b", IPs: []string{"2.2.2.2"}})
+	_ = s.Add(dnsrewrite.DNSRewrite{Pattern: "c", IPs: []string{"3.3.3.3"}})
+
+	// from < to: Move(0,2) on [a,b,c] => [b,c,a]
+	if err := s.Move(0, 2); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := s.List()
+	got := []string{list[0].Pattern, list[1].Pattern, list[2].Pattern}
+	if got[0] != "b" || got[1] != "c" || got[2] != "a" {
+		t.Errorf("Move(0,2) => %v, want [b c a]", got)
+	}
+
+	// Move out-of-range must fail
+	if err := s.Move(0, 99); err == nil {
+		t.Error("Move out of range must fail")
+	}
+}
+
 func TestDNSRewriteStorePersists(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "dns-rewrites.json")
 	s1 := NewDNSRewriteStore(path)
