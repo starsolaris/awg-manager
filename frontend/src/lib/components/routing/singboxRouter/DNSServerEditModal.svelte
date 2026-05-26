@@ -153,8 +153,10 @@
 					if (resolverStrategy) built.domain_resolver.strategy = resolverStrategy;
 				}
 			}
-			if (type !== 'local' && detour) built.detour = detour;
-			if (strategy) built.domain_strategy = strategy;
+			if (type !== 'local') {
+				if (detour) built.detour = detour;
+				if (strategy) built.domain_strategy = strategy;
+			}
 
 			await onSave(built);
 		} catch (e) {
@@ -208,10 +210,10 @@
 			{/if}
 		</div>
 
-		<section class="form-section">
-			<div class="section-label">Маршрутизация</div>
+		{#if type !== 'local'}
+			<section class="form-section">
+				<div class="section-label">Маршрутизация</div>
 
-			{#if type !== 'local'}
 				<label class="field">
 					<div class="lbl">Detour (outbound)</div>
 					<Dropdown bind:value={detour} options={detourOptions} fullWidth />
@@ -225,13 +227,13 @@
 						{/if}
 					</div>
 				</label>
-			{/if}
 
-			<label class="field">
-				<div class="lbl">Стратегия (IPv4/IPv6)</div>
-				<Dropdown bind:value={strategy} options={STRATEGY_OPTIONS} fullWidth />
-			</label>
-		</section>
+				<label class="field">
+					<div class="lbl">Стратегия (IPv4/IPv6)</div>
+					<Dropdown bind:value={strategy} options={STRATEGY_OPTIONS} fullWidth />
+				</label>
+			</section>
+		{/if}
 
 		{#if type !== 'udp' && type !== 'local'}
 			<section class="form-section">
