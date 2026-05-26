@@ -11,6 +11,7 @@ var validDNSTypes = map[string]bool{
 	"https": true,
 	"quic":  true,
 	"h3":    true,
+	"local": true,
 }
 
 var validDNSStrategies = map[string]bool{
@@ -34,7 +35,7 @@ func validateDNSServer(s DNSServer) error {
 	if !validDNSTypes[s.Type] {
 		return fmt.Errorf("dns server %q: unknown type %q", s.Tag, s.Type)
 	}
-	if strings.TrimSpace(s.Server) == "" {
+	if s.Type != "local" && strings.TrimSpace(s.Server) == "" {
 		return fmt.Errorf("dns server %q: server is required", s.Tag)
 	}
 	if s.ServerPort < 0 || s.ServerPort > 65535 {
