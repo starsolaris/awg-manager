@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { DnsStaticRecord } from '$lib/types';
+	import { Badge } from '$lib/components/ui';
 	interface Props { records: DnsStaticRecord[]; }
 	let { records }: Props = $props();
 	let open = $state(false);
@@ -9,7 +10,7 @@
 	<button type="button" class="head" onclick={() => (open = !open)}>
 		<span class="chev">›</span>
 		<span class="title">Статические записи</span>
-		<span class="count">{records.length}</span>
+		<Badge variant="muted" size="sm" mono>{records.length}</Badge>
 	</button>
 	{#if open}
 		<table>
@@ -18,7 +19,7 @@
 				{#each records as r}
 					<tr>
 						<td class="mono">{r.host}</td>
-						<td><span class="type" class:aaaa={r.type === 'AAAA'}>{r.type}</span></td>
+						<td><Badge variant={r.type === 'AAAA' ? 'info' : 'success'} size="sm" mono>{r.type}</Badge></td>
 						<td class="mono muted">{r.value}</td>
 						<td class="num">{r.flag}</td>
 					</tr>
@@ -33,7 +34,6 @@
 	.chev { color: var(--text-muted); transition: transform .15s; }
 	.static.open .chev { transform: rotate(90deg); }
 	.title { font-weight: 600; }
-	.count { font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-muted); background: color-mix(in srgb, var(--text-muted) 14%, transparent); border-radius: 5px; padding: 1px 7px; }
 	table { width: 100%; border-collapse: collapse; margin-top: 12px; }
 	th { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; padding: 0 10px 8px 0; text-align: left; }
 	td { padding: 8px 10px 8px 0; border-top: 1px solid var(--border-soft, var(--border)); font-size: 13px; }
@@ -41,6 +41,4 @@
 	.muted { color: var(--text-muted); }
 	.num { text-align: right; font-family: ui-monospace, monospace; }
 	th.num { text-align: right; }
-	.type { font-family: ui-monospace, monospace; font-size: 11px; font-weight: 650; color: var(--success); }
-	.type.aaaa { color: var(--accent); }
 </style>

@@ -1,12 +1,14 @@
 <script lang="ts">
 	import type { DnsUpstream } from '$lib/types';
+	import { Badge } from '$lib/components/ui';
+	import type { BadgeVariant } from '$lib/components/ui';
 	interface Props { upstreams: DnsUpstream[]; }
 	let { upstreams }: Props = $props();
 
-	function encClass(e: string): string {
-		if (e === 'DoT') return 'enc-dot';
-		if (e === 'DoH') return 'enc-doh';
-		return 'enc-plain';
+	function encVariant(e: string): BadgeVariant {
+		if (e === 'DoT') return 'success';
+		if (e === 'DoH') return 'accent';
+		return 'muted';
 	}
 	function scopeLabel(s: string): string {
 		return s === 'all' ? 'все' : `.${s}`;
@@ -21,7 +23,7 @@
 		{#each upstreams as u}
 			<tr>
 				<td class="mono">{u.address}{#if u.port}<span class="faint">:{u.port}</span>{/if}</td>
-				<td><span class="enc {encClass(u.encryption)}">{u.encryption}</span></td>
+				<td><Badge variant={encVariant(u.encryption)} size="sm">{u.encryption}</Badge></td>
 				<td class="muted">{u.sni || '—'}</td>
 				<td><span class="scope" class:scope-ru={u.scope !== 'all'}>{scopeLabel(u.scope)}</span></td>
 			</tr>
@@ -37,10 +39,6 @@
 	.mono { font-family: ui-monospace, monospace; font-size: 13px; }
 	.faint { color: var(--text-muted); opacity: .7; }
 	.muted { color: var(--text-muted); }
-	.enc { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 650; }
-	.enc-dot { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
-	.enc-doh { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
-	.enc-plain { background: color-mix(in srgb, var(--text-muted) 18%, transparent); color: var(--text-muted); }
 	.scope { font-size: 12px; color: var(--text-muted); }
 	.scope-ru { color: var(--accent); font-weight: 600; }
 </style>

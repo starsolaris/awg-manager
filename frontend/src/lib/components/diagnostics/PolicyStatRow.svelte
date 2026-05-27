@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { DnsProxy } from '$lib/types';
+	import { Badge } from '$lib/components/ui';
 	interface Props { proxy: DnsProxy; open?: boolean; }
 	let { proxy, open: initialOpen = false }: Props = $props();
 	// svelte-ignore state_referenced_locally — intentional: initial expanded state from prop, then user-controlled
@@ -16,7 +17,7 @@
 		<span class="chev">›</span>
 		<span class="pol-name">
 			{proxy.displayName}
-			{#if rawChip}<span class="chip">{rawChip}</span>{/if}
+			{#if rawChip}<Badge variant="muted" size="sm" mono>{rawChip}</Badge>{/if}
 		</span>
 		<span class="pol-port">:{proxy.tcpPort}</span>
 		<span class="pol-metrics">
@@ -43,7 +44,7 @@
 							<td class="num">{u.nxRcvd}</td>
 							<td class="num">{u.medResp || '—'}</td>
 							<td class="num">{u.avgResp || '—'}</td>
-							<td class="num"><span class="rank">{u.rank}</span></td>
+							<td class="num"><Badge variant="accent" size="sm" mono>{u.rank}</Badge></td>
 						</tr>
 					{/each}
 				</tbody>
@@ -59,7 +60,6 @@
 	.chev { color: var(--text-muted); transition: transform .15s; }
 	.pol.open .chev { transform: rotate(90deg); }
 	.pol-name { font-weight: 600; display: flex; align-items: center; gap: 8px; min-width: 150px; }
-	.chip { font-family: ui-monospace, monospace; font-size: 10px; font-weight: 600; color: var(--text-muted); background: color-mix(in srgb, var(--text-muted) 14%, transparent); border-radius: 5px; padding: 1px 6px; }
 	.pol-port { font-family: ui-monospace, monospace; font-size: 12px; color: var(--text-muted); min-width: 60px; }
 	.pol-metrics { margin-left: auto; display: flex; align-items: center; gap: 18px; }
 	.metric { display: flex; flex-direction: column; align-items: flex-end; }
@@ -76,5 +76,4 @@
 	.num { text-align: right; font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums; }
 	th.num { text-align: right; }
 	.mono { font-family: ui-monospace, monospace; font-size: 13px; }
-	.rank { font-family: ui-monospace, monospace; font-size: 11px; font-weight: 650; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 5px; padding: 1px 7px; }
 </style>
