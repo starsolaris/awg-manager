@@ -510,7 +510,7 @@
 		align-items: start;
 	}
 	.hrneo-tab.mobile {
-		grid-template-columns: 1fr;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 8px;
 	}
 	.pane-container {
@@ -566,7 +566,11 @@
 	}
 	.tname {
 		flex: 1;
+		min-width: 0;
 		font-weight: 600;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 	.tmeta {
 		color: var(--text-muted);
