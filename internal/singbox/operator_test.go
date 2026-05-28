@@ -144,6 +144,29 @@ func TestOperator_GetStatus_UpdateAvailableWhenSameVersionSHADiffers(t *testing.
 	}
 }
 
+func TestOperator_GetStatus_PopulatesInstallStateAndBytes(t *testing.T) {
+	dir := t.TempDir()
+	binary := filepath.Join(dir, "sing-box") // не установлен
+	op := NewOperator(OperatorDeps{Dir: dir, Binary: binary})
+	inst := installer.New(binary, "test-arch", installer.BinarySpec{
+		Version: "1.2.3", URL: "u", SHA256: "s", Size: 100 << 20,
+	}, nil)
+	inst.SetFreeDiskFn(func(string) (int64, bool) { return 50 << 20, true })
+	op.SetInstaller(inst)
+
+	s := op.GetStatus(context.Background())
+
+	if s.InstallState != string(installer.InstallStateMissingNoSpace) {
+		t.Fatalf("InstallState=%q want %q", s.InstallState, installer.InstallStateMissingNoSpace)
+	}
+	if s.RequiredBytes == 0 {
+		t.Fatalf("RequiredBytes=0, want > 0")
+	}
+	if s.FreeBytes == 0 {
+		t.Fatalf("FreeBytes=0, want > 0")
+	}
+}
+
 func TestEnsureBaseConfig_FullSkeleton(t *testing.T) {
 	dir := t.TempDir()
 	configDir := filepath.Join(dir, "config.d")

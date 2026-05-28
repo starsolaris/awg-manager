@@ -240,6 +240,15 @@ func (i *Installer) CurrentVersion(ctx context.Context) string {
 	return ""
 }
 
+// FreeBytes wraps the freeDisk probe so callers (Operator.GetStatus) don't
+// recompute install-dir. Returns (0, false) when probe unavailable.
+func (i *Installer) FreeBytes() (int64, bool) {
+	if i.freeDisk == nil {
+		return 0, false
+	}
+	return i.freeDisk(filepath.Dir(i.binaryPath))
+}
+
 // SetFreeDiskFn overrides the free-disk probe (tests only).
 func (i *Installer) SetFreeDiskFn(fn func(string) (int64, bool)) {
 	i.freeDisk = fn
@@ -254,6 +263,9 @@ func isExecutable(path string) bool {
 // safetyMargin is added on top of spec.Size for the disk-gate, covering
 // tmp download file, logs, and slack. ~5 MiB.
 const safetyMargin = 5 << 20
+
+// SafetyMargin is the disk-gate slack added to spec.Size (bytes).
+const SafetyMargin = safetyMargin
 
 // EvaluateInstallState reports the install state vs pinned spec, gated by
 // free disk. Pure file ops: isExecutable + sha256File (no `sing-box version`

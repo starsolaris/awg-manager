@@ -1377,6 +1377,13 @@ func (o *Operator) GetStatus(ctx context.Context) Status {
 	} else {
 		s.UpdateAvailable = s.CurrentVersion != "" && s.RequiredVersion != "" && s.CurrentVersion != s.RequiredVersion
 	}
+	if o.inst != nil {
+		s.InstallState = string(o.inst.EvaluateInstallState())
+		s.RequiredBytes = o.inst.RequiredSize() + installer.SafetyMargin
+		if free, ok := o.inst.FreeBytes(); ok {
+			s.FreeBytes = free
+		}
+	}
 	return s
 }
 
