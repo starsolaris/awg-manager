@@ -242,6 +242,7 @@
                         label={latText}
                         state={cardState}
                         {checking}
+                        forceBorder
                         onclick={(e) => {
                             e.stopPropagation();
                             void triggerCheck(e);
@@ -430,7 +431,13 @@
         </div>
         <div class="dense-toolbar">
             <div class="dense-toolbar-bottom">
-                <PingButton label={latText} state={cardState} {checking} size="sm" onclick={triggerCheck} />
+                <PingButton
+                    label={latText}
+                    state={cardState}
+                    {checking}
+                    forceBorder
+                    onclick={triggerCheck}
+                />
             </div>
         </div>
     </div>
@@ -577,7 +584,13 @@
     class:unknown={cardState === 'unknown'}
 >
     <div class="led-wrap">
-        <PingButton label={latText} state={cardState} {checking} onclick={triggerCheck} />
+        <PingButton
+            label={latText}
+            state={cardState}
+            {checking}
+            forceBorder
+            onclick={triggerCheck}
+        />
     </div>
 
     <div class="title-row">

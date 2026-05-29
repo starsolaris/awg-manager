@@ -189,7 +189,7 @@
 						label={delayText}
 						state={delayState}
 						checking={testingDelay}
-						size="sm"
+						forceBorder
 						onclick={runDelayCheck}
 					/>
 				{:else}
@@ -377,15 +377,25 @@
 				<span class="meta-dot" aria-hidden="true">·</span><span>{subscription.memberTags.length} серв.</span>
 			</div>
 		</div>
-		<span
-			class="status-badge status-badge-dense"
-			class:status-off={!subscription.enabled}
-			class:status-error={subscription.enabled && status === 'error'}
-			class:status-ok={subscription.enabled && status === 'ok'}
-			class:status-pending={subscription.enabled && status === 'pending'}
-		>
-			{feedStatusLabel}
-		</span>
+		{#if subscription.enabled && !subscription.lastError && resolvedMemberTag}
+			<PingButton
+				label={delayText}
+				state={delayState}
+				checking={testingDelay}
+				forceBorder
+				onclick={runDelayCheck}
+			/>
+		{:else}
+			<span
+				class="status-badge status-badge-dense"
+				class:status-off={!subscription.enabled}
+				class:status-error={subscription.enabled && status === 'error'}
+				class:status-ok={subscription.enabled && status === 'ok'}
+				class:status-pending={subscription.enabled && status === 'pending'}
+			>
+				{feedStatusLabel}
+			</span>
+		{/if}
 	</div>
 	<hr class="divider" />
 	<div class="inactive-meta-dense secondary mono">

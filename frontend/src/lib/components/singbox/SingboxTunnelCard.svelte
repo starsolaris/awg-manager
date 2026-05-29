@@ -190,6 +190,7 @@
 				label={latText}
 				state={cardState}
 				{checking}
+				forceBorder
 				onclick={triggerCheck}
 			/>
 		</div>
@@ -360,7 +361,7 @@
 		</div>
 		<div class="dense-toolbar">
 			<div class="dense-toolbar-bottom">
-				<PingButton label={latText} state={cardState} {checking} size="sm" onclick={triggerCheck} />
+				<PingButton label={latText} state={cardState} {checking} forceBorder onclick={triggerCheck} />
 			</div>
 		</div>
 	</div>
@@ -515,7 +516,7 @@
 	<div class="title-row">
 		<span class="dot {cardState}" aria-hidden="true"></span>
 		<h3 class="title">{tunnel.tag}</h3>
-		<PingButton label={latText} state={cardState} {checking} size="sm" onclick={triggerCheck} />
+		<PingButton label={latText} state={cardState} {checking} forceBorder onclick={triggerCheck} />
 	</div>
 	<div class="iface">
 		<span>{tunnel.proxyInterface || 'via sing-box'}</span>
