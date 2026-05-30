@@ -5,7 +5,16 @@ vi.mock('$lib/api/client', () => ({
     singboxRouterCreatePolicy: vi.fn(),
     singboxRouterEnable: vi.fn(),
     singboxRouterPutSettings: vi.fn(),
+    singboxRouterPutRouteFinal: vi.fn(),
   },
+}));
+
+vi.mock('./addWizardActions', () => ({
+  submitWizard: vi.fn(async () => ({ successes: ['svc:netflix'], failures: [] })),
+}));
+
+vi.mock('./settingsActions', () => ({
+  mergeAndSaveSettings: vi.fn(async () => {}),
 }));
 
 vi.mock('$lib/stores/singboxRouter', () => {
@@ -40,8 +49,10 @@ import { api } from '$lib/api/client';
 import { singboxRouter } from '$lib/stores/singboxRouter';
 import { clearSelection, toggleTemplate } from './templatesStore';
 import { openAddWizard } from './addWizardStore';
+import { submitWizard } from './addWizardActions';
+import { mergeAndSaveSettings } from './settingsActions';
 import {
-  applyRecipe, createDefaultPolicy, setAutoDetectWan, setManualWan, enableEngine,
+  applyRecipe, createDefaultPolicy, setAutoDetectWan, setManualWan, enableEngine, finishSetup,
 } from './emptyStateActions';
 
 describe('emptyStateActions', () => {
@@ -101,5 +112,27 @@ describe('emptyStateActions', () => {
     await enableEngine();
     expect(api.singboxRouterEnable).toHaveBeenCalled();
     expect(singboxRouter.loadAll).toHaveBeenCalled();
+  });
+
+  it('finishSetup: правила(tunnel) → final=direct → bake defaults(all) → enable → loadAll', async () => {
+    const empty = {
+      domainSuffix: '', ipCidr: '', sourceIpCidr: '', port: '', ruleSetTags: new Set<string>(),
+    };
+    const res = await finishSetup({
+      tunnelTag: 'wg-nl',
+      selectedTemplates: ['svc:netflix'],
+      customFields: empty,
+      groups: [],
+    });
+    expect(submitWizard).toHaveBeenCalledWith(
+      expect.objectContaining({ outboundCategory: 'tunnel', tunnelTag: 'wg-nl', selectedTemplates: ['svc:netflix'] }),
+    );
+    expect(api.singboxRouterPutRouteFinal).toHaveBeenCalledWith('direct');
+    expect(mergeAndSaveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceMode: 'all', wanAutoDetect: true, wanInterface: '', snifferEnabled: true }),
+    );
+    expect(api.singboxRouterEnable).toHaveBeenCalled();
+    expect(singboxRouter.loadAll).toHaveBeenCalled();
+    expect(res.successes).toContain('svc:netflix');
   });
 });
