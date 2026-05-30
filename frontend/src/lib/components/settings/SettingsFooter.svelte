@@ -3,6 +3,17 @@
 
 	const isExpert = $derived($usageLevel === 'expert');
 
+	const genericIssueBody = [
+		'## Что хотите сообщить',
+		'',
+		'<!-- Опишите баг, идею или предложение -->',
+		'',
+		'## Важно',
+		'',
+		'AWG Manager — open-source проект без службы поддержки и SLA. Ответ и исправление не гарантируются.',
+	].join('\n');
+	const genericIssueUrl = `https://github.com/hoaxisr/awg-manager/issues/new?title=${encodeURIComponent('Обратная связь AWG Manager')}&body=${encodeURIComponent(genericIssueBody)}`;
+
 	const credits = [
 		'@amatol',
 		'@paris19891', '@The_Immortal', '@LionEvil', '@dio1122', '@Nidre',
@@ -50,6 +61,16 @@
 				title="GitHub репозиторий AWG Manager"
 			>
 				GitHub
+			</a>
+			<span class="footer-sep">·</span>
+			<a
+				href={genericIssueUrl}
+				target="_blank"
+				rel="noopener noreferrer"
+				aria-label="Открыть форму GitHub issue для обратной связи"
+				title="Публичный GitHub issue: это не служба поддержки"
+			>
+				Сообщить
 			</a>
 			{#if isExpert}
 				<span class="footer-sep">·</span>
