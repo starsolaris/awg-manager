@@ -4,10 +4,9 @@
 </script>
 
 <script lang="ts">
-  import { Settings as SettingsIcon, FileJson, Search } from 'lucide-svelte';
+  import { FileJson, Search } from 'lucide-svelte';
   import { mode, setMode, type RouterMode } from './modeStore';
   import { openDrawer } from './drawerStore';
-  import { openSettingsDrawer } from './settingsDrawerStore';
   import { Badge } from '$lib/components/ui';
   import StatusDrawer from './StatusDrawer.svelte';
 
@@ -69,18 +68,6 @@
     {#if onOpenInspector}
       <button type="button" class="icon-btn" onclick={onOpenInspector} aria-label="Инспектор маршрута" title="Инспектор маршрута">
         <Search size={16} />
-      </button>
-    {/if}
-
-    {#if currentMode === 'expert'}
-      <button
-        type="button"
-        class="icon-btn"
-        onclick={openSettingsDrawer}
-        aria-label="Настройки движка"
-        title="Настройки движка"
-      >
-        <SettingsIcon size={16} />
       </button>
     {/if}
 

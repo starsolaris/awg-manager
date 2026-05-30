@@ -3,7 +3,6 @@
   import { goto } from '$app/navigation';
   import { singboxRouter as singboxRouterStore } from '$lib/stores/singboxRouter';
   import { DeviceProxySubTab, StagingBanner, EngineSubTab, PresetsSubTab, RouteInspector, JsonConfigDrawer } from '$lib/components/singbox-routing';
-  import SettingsDrawer from './SettingsDrawer.svelte';
   import { ConnectionsSubTab } from '$lib/components/routing/singboxRouter';
   import {
     PageShell,
@@ -66,8 +65,6 @@
     <ExpertPanel />
   {/if}
 </PageShell>
-
-<SettingsDrawer />
 
 <RouteInspector open={inspectorOpen} onClose={() => (inspectorOpen = false)} />
 <JsonConfigDrawer open={jsonOpen} onClose={() => (jsonOpen = false)} />
