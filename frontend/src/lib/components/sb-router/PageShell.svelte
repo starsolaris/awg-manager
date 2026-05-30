@@ -72,15 +72,17 @@
       </button>
     {/if}
 
-    <button
-      type="button"
-      class="icon-btn"
-      onclick={openSettingsDrawer}
-      aria-label="Настройки движка"
-      title="Настройки движка"
-    >
-      <SettingsIcon size={16} />
-    </button>
+    {#if currentMode === 'expert'}
+      <button
+        type="button"
+        class="icon-btn"
+        onclick={openSettingsDrawer}
+        aria-label="Настройки движка"
+        title="Настройки движка"
+      >
+        <SettingsIcon size={16} />
+      </button>
+    {/if}
 
     <div class="mode-toggle" role="tablist" aria-label="Режим интерфейса">
       <button

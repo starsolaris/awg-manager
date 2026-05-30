@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import { singboxRouter as singboxRouterStore } from '$lib/stores/singboxRouter';
   import { DeviceProxySubTab, StagingBanner, EngineSubTab, PresetsSubTab, RouteInspector, JsonConfigDrawer } from '$lib/components/singbox-routing';
   import SettingsDrawer from './SettingsDrawer.svelte';
@@ -30,13 +31,21 @@
     if (!s || !s.installed) return 'unknown';
     return s.enabled ? 'ok' : 'down';
   });
+
+  $effect(() => {
+    if ($sbMode === 'beginner' && (activeSingboxSub === 'engine' || activeSingboxSub === 'presets')) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('sub');
+      void goto(`${url.pathname}${url.search}`, { replaceState: true, keepFocus: true, noScroll: true });
+    }
+  });
 </script>
 
 <PageShell engineStatus={sbEngineStatus} onOpenInspector={() => (inspectorOpen = true)} onOpenJson={() => (jsonOpen = true)}>
   <StagingBanner />
-  {#if activeSingboxSub === 'engine'}
+  {#if activeSingboxSub === 'engine' && $sbMode === 'expert'}
     <EngineSubTab />
-  {:else if activeSingboxSub === 'presets'}
+  {:else if activeSingboxSub === 'presets' && $sbMode === 'expert'}
     <PresetsSubTab />
   {:else if activeSingboxSub === 'deviceproxy'}
     <DeviceProxySubTab />
