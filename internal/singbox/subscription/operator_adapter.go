@@ -417,6 +417,7 @@ func (a *OperatorAdapter) flush() error {
 	// Pass 2 — sing-box check with iterative drop. Cap iterations to
 	// initial outbound count so a parser bug cannot loop forever.
 	maxIter := len(a.cfg.Outbounds) + 1
+	xSlotCleaned := map[string]bool{} // cross-slot tags already cleaned — guards against re-reporting a ref we can't actually remove
 	for iter := 0; iter < maxIter; iter++ {
 		data, err := json.MarshalIndent(a.cfg, "", "  ")
 		if err != nil {
@@ -431,6 +432,28 @@ func (a *OperatorAdapter) flush() error {
 		}
 		idx, ok := parseSingboxOutboundIndex(res.Error())
 		if !ok {
+			// Not a sing-box index error. It may be a cross-slot
+			// unknown-outbound: a selector/urltest in our slot referencing a
+			// member tag that no slot declares (dangling group member, e.g.
+			// after a subscription update changed server tags). The
+			// index-based loop can't reach these; self-heal by dropping the
+			// dangling member refs, then retry. Only give up if nothing was
+			// cleanable.
+			// Only retry on genuinely-new progress: a tag we already cleaned
+			// reappearing means cleanReferencesToTag couldn't actually remove
+			// the ref (e.g. a reference path it doesn't walk) — looping would
+			// spin to the cap and then save a still-broken config. Bail instead.
+			progress := false
+			for _, t := range cleanCrossSlotUnknownRefs(&a.cfg, res) {
+				if !xSlotCleaned[t] {
+					xSlotCleaned[t] = true
+					progress = true
+					dropped = append(dropped, DropReason{Tag: t, Reason: "висячая ссылка в группе: ни один слот не объявляет этот outbound"})
+				}
+			}
+			if progress {
+				continue
+			}
 			// Unknown error class — cannot isolate, give up.
 			return fmt.Errorf("%w: could not isolate outbound: %s", ErrValidation, res.Error())
 		}
@@ -458,6 +481,28 @@ func (a *OperatorAdapter) flush() error {
 
 	a.lastDropped = dropped
 	return nil
+}
+
+// cleanCrossSlotUnknownRefs removes member references (selector/urltest
+// "outbounds") to outbound tags that the cross-slot validator reported as
+// unknown-outbound for the subscriptions slot. This self-heals dangling
+// group members that the sing-box index-based isolation loop in flush()
+// cannot reach (it only understands sing-box "initialize outbound[N]"
+// errors, not our own cross-slot validation result). Only the
+// subscriptions slot is touched — unknown-outbounds reported for other
+// slots aren't ours to fix here. Returns the distinct tags cleaned.
+func cleanCrossSlotUnknownRefs(cfg *slotConfig, res orchestrator.ValidationResult) []string {
+	seen := map[string]bool{}
+	var cleaned []string
+	for _, e := range res.Errors {
+		if e.Slot != orchestrator.SlotSubscriptions || e.Kind != "unknown-outbound" || e.Tag == "" || seen[e.Tag] {
+			continue
+		}
+		seen[e.Tag] = true
+		cleanReferencesToTag(cfg, e.Tag)
+		cleaned = append(cleaned, e.Tag)
+	}
+	return cleaned
 }
 
 // LastFilterDrops returns the outbounds filtered out of the most recent
