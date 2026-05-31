@@ -2,7 +2,7 @@
 	import { api } from '$lib/api/client';
 	import { notifications } from '$lib/stores/notifications';
 	import { Button, ConfirmModal } from '$lib/components/ui';
-	import { Trash2 } from 'lucide-svelte';
+	import { Trash2, Edit3 } from 'lucide-svelte';
 	import CreateIcon from '$lib/components/ui/icons/CreateIcon.svelte';
 	import type { SingboxRouterDNSRewrite } from '$lib/types';
 	import DNSRewriteEditModal from './DNSRewriteEditModal.svelte';
@@ -78,7 +78,7 @@
 					aria-label={`Редактировать DNS-перезапись ${rw.pattern}`}
 					title={`Редактировать DNS-перезапись «${rw.pattern}»`}
 				>
-					✎
+					<Edit3 size={15} />
 				</button>
 				<button
 					type="button"
@@ -87,7 +87,7 @@
 					aria-label={`Удалить DNS-перезапись ${rw.pattern}`}
 					title={`Удалить DNS-перезапись «${rw.pattern}»`}
 				>
-					<Trash2 size={13} />
+					<Trash2 size={15} />
 				</button>
 			</div>
 		{/each}
@@ -147,8 +147,8 @@
 	}
 	.col-header {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px;
-		gap: 0.5rem;
+		grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) 36px 36px;
+		gap: 0.4rem;
 		padding: 0.25rem 0.75rem;
 		font-size: 0.65rem;
 		letter-spacing: 0.5px;
@@ -160,19 +160,15 @@
 		gap: 0.2rem;
 		min-width: 0;
 	}
-	.col-header,
 	.row {
 		display: grid;
-		grid-template-columns: minmax(0, 1.35fr) 16px minmax(0, 1fr) 36px 36px;
+		grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) 36px 36px;
 		gap: 0.4rem;
 		align-items: center;
 		min-width: 0;
-	}
-	.row {
 		background: var(--surface-bg);
 		padding: 0.5rem 0.75rem;
 		border-radius: 4px;
-		--route-action-color: var(--accent);
 		overflow: hidden;
 	}
 
@@ -194,65 +190,6 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.route-action-btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 32px;
-		min-width: 32px;
-		height: 18px;
-		padding: 0;
-		border-radius: 9px;
-		border: 1px solid color-mix(in srgb, var(--route-action-color, var(--accent)) 50%, transparent);
-		background: color-mix(in srgb, var(--route-action-color, var(--accent)) 8%, transparent);
-		color: color-mix(in srgb, var(--route-action-color, var(--accent)) 58%, transparent);
-		box-shadow: 0 0 8px color-mix(in srgb, var(--route-action-color, var(--accent)) 18%, transparent);
-		cursor: pointer;
-		font-size: 0.9rem;
-		justify-self: center;
-		transition:
-			color 0.16s ease,
-			border-color 0.16s ease,
-			background 0.16s ease,
-			box-shadow 0.16s ease,
-			transform 0.12s ease;
-	}
-
-	.route-action-btn :global(svg) {
-		width: 13px;
-		height: 13px;
-		flex-shrink: 0;
-	}
-
-	.route-action-btn:hover:not(:disabled) {
-		color: var(--route-action-color, var(--accent));
-		border-color: color-mix(in srgb, var(--route-action-color, var(--accent)) 80%, transparent);
-		background: color-mix(in srgb, var(--route-action-color, var(--accent)) 16%, transparent);
-		box-shadow: 0 0 10px color-mix(in srgb, var(--route-action-color, var(--accent)) 34%, transparent);
-	}
-
-	.route-action-btn.danger:hover:not(:disabled) {
-		color: var(--danger, #dc2626);
-		border-color: color-mix(in srgb, var(--danger, #dc2626) 80%, transparent);
-		background: color-mix(in srgb, var(--danger, #dc2626) 14%, transparent);
-		box-shadow: 0 0 10px color-mix(in srgb, var(--danger, #dc2626) 30%, transparent);
-	}
-
-	.route-action-btn:active:not(:disabled) {
-		transform: translateY(1px);
-	}
-
-	.route-action-btn:focus-visible {
-		outline: 1px solid color-mix(in srgb, var(--route-action-color, var(--accent)) 90%, transparent);
-		outline-offset: 2px;
-	}
-
-	.route-action-btn:disabled {
-		opacity: 0.35;
-		cursor: not-allowed;
-		box-shadow: none;
-	}
-
 	@media (max-width: 720px) {
 		.col-header {
 			display: none;

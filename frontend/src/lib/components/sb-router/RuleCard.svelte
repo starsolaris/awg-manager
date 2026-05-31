@@ -10,7 +10,7 @@
   import MatcherChip from './MatcherChip.svelte';
   import OutboundTile from './OutboundTile.svelte';
   import { Badge } from '$lib/components/ui';
-  import { Edit3, GripVertical, X } from 'lucide-svelte';
+  import { Edit3, GripVertical, Trash2 } from 'lucide-svelte';
 
   interface Props {
     card: RuleCardData;
@@ -73,7 +73,7 @@
         title={`Перетащить правило #${orderStr}`}
         onpointerdown={onHandlePointerDown}
       >
-        <GripVertical size={14} />
+        <GripVertical size={16} />
       </button>
     {:else}
       <div class="handle-disabled" aria-hidden="true"></div>
@@ -130,14 +130,14 @@
     <div class="right-slot">
       {#if onEdit}
         <span class="action-tip" data-tip={editTip}>
-          <button type="button" class="edit-btn" onclick={onEdit} aria-label={editTip} title={editTip}>
-            <Edit3 size={14} />
+          <button type="button" class="route-action-btn" onclick={onEdit} aria-label={editTip} title={editTip}>
+            <Edit3 size={15} />
           </button>
         </span>
       {/if}
       <span class="action-tip" data-tip={deleteTip}>
-        <button type="button" class="del-btn" onclick={onDelete} aria-label={deleteTip} title={deleteTip}>
-          <X size={14} />
+        <button type="button" class="route-action-btn danger" onclick={onDelete} aria-label={deleteTip} title={deleteTip}>
+          <Trash2 size={15} />
         </button>
       </span>
     </div>
@@ -201,30 +201,26 @@
     gap: 2px;
   }
   .drag-handle {
-    width: 26px;
-    min-width: 26px;
-    height: 22px;
-    border-radius: 7px;
-    border: 1px solid var(--border);
-    background: var(--bg-tertiary);
+    background: transparent;
+    border: none;
     color: var(--text-muted);
+    padding: 2px;
     cursor: grab;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     touch-action: none;
+    border-radius: 4px;
+    transition: color 0.15s;
   }
   .drag-handle:hover {
     color: var(--text-primary);
-    border-color: var(--border-hover);
   }
   .drag-handle:active { cursor: grabbing; }
   .handle-disabled {
-    width: 26px;
-    height: 22px;
-    border-radius: 7px;
-    border: 1px dashed var(--border);
-    opacity: 0.35;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
   }
   .main {
     display: flex;
@@ -325,27 +321,6 @@
     padding: 6px 8px;
     z-index: 10;
     pointer-events: none;
-  }
-
-  .edit-btn,
-  .del-btn {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    padding: 5px;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .edit-btn:hover {
-    color: var(--accent);
-    border-color: var(--accent);
-  }
-  .del-btn:hover {
-    color: var(--color-danger, #ef4444);
-    border-color: var(--color-danger, #ef4444);
   }
 
   /* ── Mobile: stack vertically ── */

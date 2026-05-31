@@ -53,7 +53,7 @@
 			<div class="policy-actions">
 				<button
 					type="button"
-					class="action-btn edit"
+					class="route-action-btn"
 					title={isHrPolicy
 						? `Открыть HydraRoute-политику «${policy.description || policy.name}»`
 						: `Изменить политику «${policy.description || policy.name}»`}
@@ -67,7 +67,7 @@
 				{#if !isHrPolicy}
 				<button
 					type="button"
-					class="action-btn danger"
+					class="route-action-btn danger"
 					title={`Удалить политику «${policy.description || policy.name}»`}
 					onclick={() => ondelete(policy.name)}
 				>
@@ -98,7 +98,6 @@
 		align-items: flex-start;
 		gap: 12px;
 		transition: border-color 0.15s;
-		--route-action-color: var(--text-muted);
 	}
 
 	.policy-card:hover {
@@ -158,7 +157,6 @@
 
 	.policy-card-hr {
 		border-color: rgba(245, 158, 11, 0.35);
-		--route-action-color: var(--warning);
 	}
 
 	.policy-ifaces {
@@ -179,57 +177,10 @@
 
 	.policy-actions {
 		display: flex;
-		flex-direction: column;
+		gap: 4px;
 		align-items: center;
-		justify-content: center;
-		gap: 6px;
 		flex-shrink: 0;
 		align-self: center;
-	}
-
-	.action-btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 32px;
-		min-width: 32px;
-		height: 18px;
-		padding: 0;
-		border-radius: 9px;
-		border: 1px solid color-mix(in srgb, var(--route-action-color) 50%, transparent);
-		background: color-mix(in srgb, var(--route-action-color) 8%, transparent);
-		color: color-mix(in srgb, var(--route-action-color) 58%, transparent);
-		box-shadow: 0 0 8px color-mix(in srgb, var(--route-action-color) 18%, transparent);
-		cursor: pointer;
-		transition:
-			color 0.16s ease,
-			border-color 0.16s ease,
-			background 0.16s ease,
-			box-shadow 0.16s ease,
-			transform 0.12s ease;
-	}
-
-	.action-btn:hover {
-		color: var(--route-action-color);
-		border-color: color-mix(in srgb, var(--route-action-color) 80%, transparent);
-		background: color-mix(in srgb, var(--route-action-color) 16%, transparent);
-		box-shadow: 0 0 10px color-mix(in srgb, var(--route-action-color) 34%, transparent);
-	}
-
-	.action-btn:active {
-		transform: translateY(1px);
-	}
-
-	.action-btn:focus-visible {
-		outline: 1px solid color-mix(in srgb, var(--route-action-color) 90%, transparent);
-		outline-offset: 2px;
-	}
-
-	.action-btn.danger:hover {
-		color: var(--error);
-		border-color: color-mix(in srgb, var(--error) 80%, transparent);
-		background: color-mix(in srgb, var(--error) 14%, transparent);
-		box-shadow: 0 0 10px color-mix(in srgb, var(--error) 30%, transparent);
 	}
 
 	.select-cell {

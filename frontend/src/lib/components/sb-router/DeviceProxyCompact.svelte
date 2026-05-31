@@ -131,17 +131,15 @@
             </div>
           </button>
           {#if onDelete && in_.id !== 'default'}
-            <div class="mobile-row-actions">
-              <button
-                type="button"
-                class="route-action-btn danger"
-                onclick={() => onDelete(in_)}
-                aria-label={`Удалить inbound ${in_.name || in_.id}`}
-                title={`Удалить inbound «${in_.name || in_.id}»`}
-              >
-                <Trash2 size={12} />
-              </button>
-            </div>
+            <button
+              type="button"
+              class="route-action-btn danger"
+              onclick={() => onDelete(in_)}
+              aria-label={`Удалить inbound ${in_.name || in_.id}`}
+              title={`Удалить inbound «${in_.name || in_.id}»`}
+            >
+              <Trash2 size={15} />
+            </button>
           {/if}
         </div>
       {/each}
@@ -182,10 +180,9 @@
   }
   .proxy-row {
     display: grid;
-    grid-template-columns: 8px minmax(0, 1fr) 40px;
+    grid-template-columns: 8px minmax(0, 1fr) auto;
     align-items: center;
     gap: 10px;
-    --route-action-color: var(--accent);
   }
   .proxy-click {
     min-width: 0;
@@ -207,52 +204,6 @@
   }
   .proxy-click.clickable:hover {
     background: transparent;
-  }
-  .route-action-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    min-width: 32px;
-    height: 18px;
-    padding: 0;
-    border-radius: 9px;
-    border: 1px solid color-mix(in srgb, var(--route-action-color, var(--accent)) 50%, transparent);
-    background: color-mix(in srgb, var(--route-action-color, var(--accent)) 8%, transparent);
-    color: color-mix(in srgb, var(--route-action-color, var(--accent)) 58%, transparent);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--route-action-color, var(--accent)) 18%, transparent);
-    cursor: pointer;
-    flex-shrink: 0;
-    transition:
-      color 0.16s ease,
-      border-color 0.16s ease,
-      background 0.16s ease,
-      box-shadow 0.16s ease,
-      transform 0.12s ease;
-  }
-  .route-action-btn :global(svg) {
-    width: 13px;
-    height: 13px;
-    flex-shrink: 0;
-  }
-  .route-action-btn:hover:not(:disabled) {
-    color: var(--route-action-color, var(--accent));
-    border-color: color-mix(in srgb, var(--route-action-color, var(--accent)) 80%, transparent);
-    background: color-mix(in srgb, var(--route-action-color, var(--accent)) 16%, transparent);
-    box-shadow: 0 0 10px color-mix(in srgb, var(--route-action-color, var(--accent)) 34%, transparent);
-  }
-  .route-action-btn.danger:hover:not(:disabled) {
-    color: var(--color-danger, #ef4444);
-    border-color: color-mix(in srgb, var(--color-danger, #ef4444) 80%, transparent);
-    background: color-mix(in srgb, var(--color-danger, #ef4444) 14%, transparent);
-    box-shadow: 0 0 10px color-mix(in srgb, var(--color-danger, #ef4444) 30%, transparent);
-  }
-  .route-action-btn:active:not(:disabled) {
-    transform: translateY(1px);
-  }
-  .route-action-btn:focus-visible {
-    outline: 1px solid color-mix(in srgb, var(--route-action-color, var(--accent)) 90%, transparent);
-    outline-offset: 2px;
   }
   .ty {
     font-size: 11px;
@@ -305,7 +256,6 @@
     gap: 6px;
   }
   .proxy-sub {
-    margin-top: 3px;
     min-width: 0;
     margin-top: 4px;
     display: grid;
@@ -335,18 +285,6 @@
   .mono {
     font-family: var(--font-mono);
     color: var(--text-secondary);
-  }
-
-  .mobile-row-actions {
-    width: 40px;
-    min-width: 40px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.375rem;
-    justify-self: end;
-    align-self: center;
   }
 
   @media (max-width: 768px) {

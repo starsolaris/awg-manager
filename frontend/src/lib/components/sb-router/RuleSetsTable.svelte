@@ -79,7 +79,7 @@
             aria-label={`Редактировать набор правил ${rs.tag}`}
             onclick={() => onEdit(rs.tag)}
           >
-            <Edit3 size={12} />
+            <Edit3 size={15} />
           </button>
           <button
             type="button"
@@ -88,7 +88,7 @@
             aria-label={`Удалить набор правил ${rs.tag}`}
             onclick={() => onDelete(rs.tag)}
           >
-            <Trash2 size={12} />
+            <Trash2 size={15} />
           </button>
         </div>
       </div>
@@ -153,7 +153,7 @@
   }
   .header, .row {
     display: grid;
-    grid-template-columns: 150px 76px minmax(0, 1fr) 84px 68px;
+    grid-template-columns: 150px 76px minmax(0, 1fr) 84px 76px;
     padding: 7px 14px;
     align-items: center;
     gap: 8px;
@@ -181,7 +181,6 @@
   .row {
     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     font-size: 12.5px;
-    --route-action-color: var(--accent);
   }
   .tag {
     font-family: var(--font-mono);
@@ -213,65 +212,9 @@
   .actions {
     display: flex;
     justify-content: flex-end;
-    gap: 2px;
+    gap: 4px;
   }
 
-  .route-action-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    min-width: 32px;
-    height: 18px;
-    padding: 0;
-    border-radius: 9px;
-    border: 1px solid color-mix(in srgb, var(--route-action-color) 50%, transparent);
-    background: color-mix(in srgb, var(--route-action-color) 8%, transparent);
-    color: color-mix(in srgb, var(--route-action-color) 58%, transparent);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--route-action-color) 18%, transparent);
-    cursor: pointer;
-    transition:
-      color 0.16s ease,
-      border-color 0.16s ease,
-      background 0.16s ease,
-      box-shadow 0.16s ease,
-      transform 0.12s ease;
-  }
-
-  .route-action-btn :global(svg) {
-    width: 12px;
-    height: 12px;
-    flex-shrink: 0;
-  }
-
-  .route-action-btn:hover {
-    color: var(--route-action-color);
-    border-color: color-mix(in srgb, var(--route-action-color) 80%, transparent);
-    background: color-mix(in srgb, var(--route-action-color) 16%, transparent);
-    box-shadow: 0 0 10px color-mix(in srgb, var(--route-action-color) 34%, transparent);
-  }
-
-  .route-action-btn:active {
-    transform: translateY(1px);
-  }
-
-  .route-action-btn:focus-visible {
-    outline: 1px solid color-mix(in srgb, var(--route-action-color) 90%, transparent);
-    outline-offset: 2px;
-  }
-
-  .route-action-btn:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
-    box-shadow: none;
-  }
-
-  .route-action-btn.danger:hover {
-    color: var(--color-error, #dc2626);
-    border-color: color-mix(in srgb, var(--color-error, #dc2626) 80%, transparent);
-    background: color-mix(in srgb, var(--color-error, #dc2626) 14%, transparent);
-    box-shadow: 0 0 10px color-mix(in srgb, var(--color-error, #dc2626) 30%, transparent);
-  }
   .empty {
     padding: 14px;
     color: var(--text-muted);
