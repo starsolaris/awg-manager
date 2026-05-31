@@ -45,6 +45,7 @@
   import DNSServerEditModal from '$lib/components/routing/singboxRouter/DNSServerEditModal.svelte';
   import DNSRuleEditModal from '$lib/components/routing/singboxRouter/DNSRuleEditModal.svelte';
   import { DNSRewritesList } from '$lib/components/routing/singboxRouter';
+  import { ConfirmModal } from '$lib/components/ui';
 
   // Store subscriptions
   const storeStatus = singboxRouterStore.status;
@@ -84,6 +85,21 @@
   let inboundDrawerOpen = $state(false);
   let dpReloadKey = $state(0);
 
+  // Унифицированное подтверждение удаления (rule / rule-set / inbound)
+  let pendingConfirm = $state<{ title: string; message: string; run: () => Promise<void> } | null>(null);
+  let confirmBusy = $state(false);
+
+  async function runConfirm() {
+    if (!pendingConfirm) return;
+    confirmBusy = true;
+    try {
+      await pendingConfirm.run();
+      pendingConfirm = null;
+    } finally {
+      confirmBusy = false;
+    }
+  }
+
   function openInbound(in_: DeviceProxyInstance) {
     inboundDrawerInstance = in_;
     inboundDrawerOpen = true;
@@ -102,17 +118,22 @@
     inboundDrawerOpen = false;
     dpReloadKey += 1;
   }
-  async function deleteInbound(in_: DeviceProxyInstance) {
+  function deleteInbound(in_: DeviceProxyInstance) {
     if (in_.id === 'default') return;
-    if (!confirm(`Удалить inbound «${in_.name || in_.id}»?`)) return;
-    try {
-      await api.deleteDeviceProxyInstance(in_.id);
-      notifications.success('Inbound удалён');
-      dpReloadKey += 1;
-      await loadActiveProxyCount();
-    } catch (e) {
-      notifications.error(`Не удалось удалить: ${e instanceof Error ? e.message : String(e)}`);
-    }
+    pendingConfirm = {
+      title: 'Удалить inbound',
+      message: `Удалить inbound «${in_.name || in_.id}»?`,
+      run: async () => {
+        try {
+          await api.deleteDeviceProxyInstance(in_.id);
+          notifications.success('Inbound удалён');
+          dpReloadKey += 1;
+          await loadActiveProxyCount();
+        } catch (e) {
+          notifications.error(`Не удалось удалить: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      },
+    };
   }
 
   onMount(() => {
@@ -167,15 +188,20 @@
   ]);
 
   // Rule handlers
-  async function handleDeleteRule(idx: number) {
-    if (!confirm(`Удалить правило #${idx}?`)) return;
-    try {
-      await api.singboxRouterDeleteRule(idx);
-      await singboxRouterStore.loadAll();
-      notifications.success('Правило удалено');
-    } catch (e) {
-      notifications.error(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
-    }
+  function handleDeleteRule(idx: number) {
+    pendingConfirm = {
+      title: 'Удалить правило',
+      message: `Удалить правило #${idx}?`,
+      run: async () => {
+        try {
+          await api.singboxRouterDeleteRule(idx);
+          await singboxRouterStore.loadAll();
+          notifications.success('Правило удалено');
+        } catch (e) {
+          notifications.error(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      },
+    };
   }
 
   async function handleMoveRule(idx: number, dir: 'up' | 'down') {
@@ -202,15 +228,20 @@
   }
 
   // RuleSet handlers
-  async function handleDeleteRs(tag: string) {
-    if (!confirm(`Удалить набор «${tag}»?`)) return;
-    try {
-      await api.singboxRouterDeleteRuleSet(tag);
-      await singboxRouterStore.loadAll();
-      notifications.success('Набор удалён');
-    } catch (e) {
-      notifications.error(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
-    }
+  function handleDeleteRs(tag: string) {
+    pendingConfirm = {
+      title: 'Удалить набор',
+      message: `Удалить набор «${tag}»?`,
+      run: async () => {
+        try {
+          await api.singboxRouterDeleteRuleSet(tag);
+          await singboxRouterStore.loadAll();
+          notifications.success('Набор удалён');
+        } catch (e) {
+          notifications.error(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      },
+    };
   }
 
   async function handleRsAddSave(rs: SingboxRouterRuleSet) {
@@ -487,6 +518,15 @@
     onSaved={onInboundSaved}
   />
 {/if}
+
+<ConfirmModal
+  open={pendingConfirm !== null}
+  title={pendingConfirm?.title ?? ''}
+  message={pendingConfirm?.message ?? ''}
+  busy={confirmBusy}
+  onConfirm={runConfirm}
+  onClose={() => { if (!confirmBusy) pendingConfirm = null; }}
+/>
 
 <style>
   .wrap {

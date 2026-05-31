@@ -10,7 +10,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { singboxRouter as singboxRouterStore } from '$lib/stores/singboxRouter';
-  import { SectionLabel, Button } from '$lib/components/ui';
+  import { SectionLabel, Button, ConfirmModal } from '$lib/components/ui';
   import { openAddWizard } from './addWizardStore';
   import RuleCard from './RuleCard.svelte';
   import { singboxRuleToCard } from './adapters';
@@ -54,15 +54,26 @@
     return 'правил';
   }
 
-  async function handleDelete(index: number) {
-    if (!confirm(`Удалить правило #${String(index + 1).padStart(2, '0')}?`)) return;
+  let deleteIndex = $state<number | null>(null);
+  let deleteBusy = $state(false);
+
+  function requestDelete(index: number) {
+    deleteIndex = index;
+  }
+
+  async function confirmDelete() {
+    if (deleteIndex === null) return;
+    deleteBusy = true;
     try {
-      await api.singboxRouterDeleteRule(index);
+      await api.singboxRouterDeleteRule(deleteIndex);
       await syncTunnelDnsRule();
       await singboxRouterStore.loadAll();
       notifications.success('Правило удалено');
+      deleteIndex = null;
     } catch (e) {
       notifications.error(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      deleteBusy = false;
     }
   }
 </script>
@@ -94,11 +105,20 @@
   {:else}
     <div class="cards">
       {#each cards as card, i (card.id)}
-        <RuleCard {card} index={i} onDelete={() => handleDelete(i)} />
+        <RuleCard {card} index={i} onDelete={() => requestDelete(i)} />
       {/each}
     </div>
   {/if}
 </section>
+
+<ConfirmModal
+  open={deleteIndex !== null}
+  title="Удалить правило"
+  message={deleteIndex !== null ? `Удалить правило #${String(deleteIndex + 1).padStart(2, '0')}?` : ''}
+  busy={deleteBusy}
+  onConfirm={confirmDelete}
+  onClose={() => { if (!deleteBusy) deleteIndex = null; }}
+/>
 
 <style>
   .rules-panel {
