@@ -81,6 +81,9 @@
   const canSave = $derived(step1Ok && step2Ok);
 
   let submitting = $state(false);
+  // Бамп для remount CustomMatcherForm после «добавить ещё одно»:
+  // визард не уничтожается, поэтому локальный value формы надо сбросить вместе со стором.
+  let customResetKey = $state(0);
 
   async function doSave(continueAfter: boolean) {
     if (!canSave) return;
@@ -110,6 +113,7 @@
           notifications.success(`Создано правил: ${created}. Можно добавить ещё одно.`);
           clearSelection();
           resetWizardState();
+          customResetKey++;
           await singboxRouterStore.loadAll();
           if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
@@ -177,7 +181,9 @@
 
       <SelectedTemplatesRow />
 
-      <CustomMatcherForm />
+      {#key customResetKey}
+        <CustomMatcherForm />
+      {/key}
     </WizardStep>
 
     <WizardStep n={2} title="Куда направить" active={step1Ok}>
