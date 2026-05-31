@@ -28,7 +28,7 @@
     if (o.type === 'selector') return 'selector';
     if (o.type === 'urltest') return 'urltest';
     if (o.type === 'loadbalance') return 'loadbalance';
-    if (o.type === 'direct') return 'direct';
+    if (o.type === 'direct') return o.bind_interface ? `direct · → ${o.bind_interface}` : 'direct';
     return o.type;
   }
 </script>
