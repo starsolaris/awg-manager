@@ -41,6 +41,9 @@ tree.md
 pub.md
 diff.md
 build.log
+coverage.out
+coverage.txt
+coverage.html
 
 # Claude (all internal)
 .claude/
