@@ -1114,7 +1114,10 @@ func patchTunnelsSlotStripBaseOwnedBlocks(tunnelsPath string) {
 			delete(dns, "final")
 			changed = true
 		}
-		if strategy, _ := dns["strategy"].(string); strategy == "ipv4_only" {
+		// Strip the strategy that mirrors the 00-base default ("prefer_ipv4"),
+		// plus the legacy "ipv4_only" default from pre-prefer_ipv4 installs —
+		// both are base-owned leakage in this slot, not user intent.
+		if strategy, _ := dns["strategy"].(string); strategy == "prefer_ipv4" || strategy == "ipv4_only" {
 			delete(dns, "strategy")
 			changed = true
 		}
@@ -1151,7 +1154,7 @@ func freshBaseConfigWithLogLevel(logLevel string) map[string]any {
 			},
 		},
 		"dns": map[string]any{
-			"strategy": "ipv4_only",
+			"strategy": "prefer_ipv4",
 			"servers": []any{
 				map[string]any{"type": "udp", "tag": "dns-bootstrap", "server": "1.1.1.1"},
 			},

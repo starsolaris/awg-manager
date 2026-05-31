@@ -132,4 +132,11 @@ describe('ensureTunnelDnsInfra', () => {
     expect(api.singboxRouterAddDNSServer).toHaveBeenCalledWith(expect.objectContaining({ tag: 'dns-tunnel', server: '9.9.9.9', detour: 'wg-nl' }));
     expect(api.singboxRouterPutDNSGlobals).toHaveBeenCalledWith(expect.objectContaining({ final: 'dns-direct', strategy: 'ipv4_only' }));
   });
+
+  it('по умолчанию strategy=prefer_ipv4, когда стратегия не задана', async () => {
+    (api.singboxRouterListDNSServers as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (api.singboxRouterGetDNSGlobals as ReturnType<typeof vi.fn>).mockResolvedValue({ final: '', strategy: '' });
+    await ensureTunnelDnsInfra('wg-nl');
+    expect(api.singboxRouterPutDNSGlobals).toHaveBeenCalledWith(expect.objectContaining({ final: 'dns-direct', strategy: 'prefer_ipv4' }));
+  });
 });

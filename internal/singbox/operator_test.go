@@ -205,8 +205,8 @@ func TestEnsureBaseConfig_FullSkeleton(t *testing.T) {
 	if !ok {
 		t.Fatalf("dns block missing: %#v", base["dns"])
 	}
-	if dns["strategy"] != "ipv4_only" {
-		t.Errorf("dns.strategy: want ipv4_only, got %v", dns["strategy"])
+	if dns["strategy"] != "prefer_ipv4" {
+		t.Errorf("dns.strategy: want prefer_ipv4, got %v", dns["strategy"])
 	}
 	servers, _ := dns["servers"].([]any)
 	if len(servers) != 1 {
@@ -987,7 +987,7 @@ func TestPatchTunnelsSlotStripBaseOwnedBlocks_StripsDanglingFinalReference(t *te
 		t.Errorf("final must be stripped (dangling reference to removed dns-doh): %s", raw)
 	}
 	if _, present := dns["strategy"]; present {
-		t.Errorf("strategy=ipv4_only must be stripped (mirrors base default): %s", raw)
+		t.Errorf("strategy=ipv4_only must be stripped (legacy base default): %s", raw)
 	}
 	servers, _ := dns["servers"].([]any)
 	if len(servers) != 1 {

@@ -58,7 +58,7 @@ export async function ensureTunnelDnsInfra(tunnelTag: string): Promise<void> {
     await api.singboxRouterAddDNSServer(tunnelServer);
   }
   const globals = await api.singboxRouterGetDNSGlobals();
-  await api.singboxRouterPutDNSGlobals({ final: DNS_DIRECT_TAG, strategy: globals.strategy || 'ipv4_only' });
+  await api.singboxRouterPutDNSGlobals({ final: DNS_DIRECT_TAG, strategy: globals.strategy || 'prefer_ipv4' });
 }
 
 function collectTunnelDomainMatchers(rules: SingboxRouterRule[]) {
