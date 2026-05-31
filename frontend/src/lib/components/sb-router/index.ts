@@ -80,7 +80,6 @@ export {
   setOutboundCategory,
   setTunnelTag,
   updateCustomField,
-  toggleCustomRuleSet,
   resetWizardState,
   type OutboundCategory,
   type CustomMatcherFields,

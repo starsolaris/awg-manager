@@ -4,21 +4,11 @@ import { closeTrace } from './traceStore';
 export type OutboundCategory = 'tunnel' | 'direct' | 'block';
 
 export interface CustomMatcherFields {
-  domainSuffix: string;
-  ipCidr: string;
-  sourceIpCidr: string;
-  port: string;
-  ruleSetTags: Set<string>;
+  rulesList: string;
 }
 
 function emptyCustom(): CustomMatcherFields {
-  return {
-    domainSuffix: '',
-    ipCidr: '',
-    sourceIpCidr: '',
-    port: '',
-    ruleSetTags: new Set(),
-  };
+  return { rulesList: '' };
 }
 
 const openW: Writable<boolean> = writable(false);
@@ -73,15 +63,6 @@ export function updateCustomField<K extends keyof CustomMatcherFields>(
   value: CustomMatcherFields[K],
 ): void {
   customW.update((c) => ({ ...c, [key]: value }));
-}
-
-export function toggleCustomRuleSet(tag: string): void {
-  customW.update((c) => {
-    const next = new Set(c.ruleSetTags);
-    if (next.has(tag)) next.delete(tag);
-    else next.add(tag);
-    return { ...c, ruleSetTags: next };
-  });
 }
 
 export function resetWizardState(): void {

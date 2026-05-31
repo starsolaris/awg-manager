@@ -17,11 +17,7 @@ describe('addWizardStore', () => {
     expect(get(m.wizardOutboundCategory)).toBe(null);
     expect(get(m.wizardTunnelTag)).toBe(null);
     const c = get(m.wizardCustom);
-    expect(c.domainSuffix).toBe('');
-    expect(c.ipCidr).toBe('');
-    expect(c.sourceIpCidr).toBe('');
-    expect(c.port).toBe('');
-    expect(c.ruleSetTags.size).toBe(0);
+    expect(c.rulesList).toBe('');
   });
 
   it('openAddWizard sets URL ?add=1 + open=true', async () => {
@@ -36,14 +32,12 @@ describe('addWizardStore', () => {
     m.openAddWizard();
     m.setOutboundCategory('tunnel');
     m.setTunnelTag('warp');
-    m.updateCustomField('domainSuffix', 'a.com');
-    m.toggleCustomRuleSet('telegram');
+    m.updateCustomField('rulesList', 'a.com');
     m.closeAddWizard();
     expect(get(m.addWizardOpen)).toBe(false);
     expect(get(m.wizardOutboundCategory)).toBe(null);
     expect(get(m.wizardTunnelTag)).toBe(null);
-    expect(get(m.wizardCustom).domainSuffix).toBe('');
-    expect(get(m.wizardCustom).ruleSetTags.size).toBe(0);
+    expect(get(m.wizardCustom).rulesList).toBe('');
     expect(window.location.search).not.toContain('add=1');
   });
 
@@ -65,20 +59,17 @@ describe('addWizardStore', () => {
     expect(get(m.wizardTunnelTag)).toBe(null);
   });
 
-  it('updateCustomField updates field value', async () => {
+  it('updateCustomField пишет rulesList', async () => {
     const m = await import('./addWizardStore');
-    m.updateCustomField('domainSuffix', 'a.com\nb.com');
-    expect(get(m.wizardCustom).domainSuffix).toBe('a.com\nb.com');
-    m.updateCustomField('port', '443');
-    expect(get(m.wizardCustom).port).toBe('443');
+    m.updateCustomField('rulesList', '*.netflix.com\n8.8.8.8');
+    expect(get(m.wizardCustom).rulesList).toBe('*.netflix.com\n8.8.8.8');
   });
 
-  it('toggleCustomRuleSet adds and removes', async () => {
+  it('resetWizardState очищает rulesList', async () => {
     const m = await import('./addWizardStore');
-    m.toggleCustomRuleSet('telegram');
-    expect(get(m.wizardCustom).ruleSetTags.has('telegram')).toBe(true);
-    m.toggleCustomRuleSet('telegram');
-    expect(get(m.wizardCustom).ruleSetTags.has('telegram')).toBe(false);
+    m.updateCustomField('rulesList', 'foo.com');
+    m.resetWizardState();
+    expect(get(m.wizardCustom).rulesList).toBe('');
   });
 
   it('resetWizardState keeps open, clears selection/category/tunnel/custom', async () => {
@@ -86,12 +77,12 @@ describe('addWizardStore', () => {
     m.openAddWizard();
     m.setOutboundCategory('tunnel');
     m.setTunnelTag('warp');
-    m.updateCustomField('domainSuffix', 'a.com');
+    m.updateCustomField('rulesList', 'a.com');
     m.resetWizardState();
     expect(get(m.addWizardOpen)).toBe(true);
     expect(get(m.wizardOutboundCategory)).toBe(null);
     expect(get(m.wizardTunnelTag)).toBe(null);
-    expect(get(m.wizardCustom).domainSuffix).toBe('');
+    expect(get(m.wizardCustom).rulesList).toBe('');
   });
 
   it('module init с URL ?add=1 → open=true', async () => {
