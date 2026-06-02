@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { AccessPolicy } from '$lib/types';
+	import { Badge } from '$lib/components/ui';
 	import { isHydraRouteAccessPolicy } from '$lib/utils/accessPolicy';
 
 	interface Props {
@@ -35,17 +36,20 @@
 				</div>
 				<div class="policy-title-row">
 					<span class="policy-name">{policy.description || policy.name}</span>
-					{#if isHrPolicy}
-						<span class="badge-hr-route">HydraRoute</span>
-					{/if}
-					{#if policy.standalone}
-						<span class="badge-standalone">standalone</span>
-					{/if}
+					<div class="routing-badges">
+						{#if isHrPolicy}
+							<Badge variant="warning" uppercase size="xs">HydraRoute</Badge>
+						{/if}
+						{#if policy.standalone}
+							<Badge variant="muted" uppercase size="xs">standalone</Badge>
+						{/if}
+					</div>
 				</div>
 				{#if policy.interfaces?.length}
-					<div class="policy-ifaces">
+					<div class="card-route">
+						<span class="route-arrow">&rarr;</span>
 						{#each [...policy.interfaces].sort((a, b) => a.order - b.order) as iface}
-							<span class="badge-iface" title={iface.name}>{iface.label || iface.name}</span>
+							<Badge variant="muted" mono size="xs" title={iface.name}>{iface.label || iface.name}</Badge>
 						{/each}
 					</div>
 				{/if}
@@ -120,6 +124,7 @@
 	.policy-title-row {
 		display: flex;
 		align-items: center;
+		flex-wrap: wrap;
 		gap: 8px;
 		margin-bottom: 6px;
 	}
@@ -133,46 +138,8 @@
 		white-space: nowrap;
 	}
 
-	.badge-standalone {
-		font-size: 0.625rem;
-		padding: 1px 6px;
-		border-radius: 9999px;
-		background: var(--accent);
-		color: var(--color-accent-contrast, #ffffff);
-		font-weight: 500;
-		white-space: nowrap;
-		flex-shrink: 0;
-	}
-
-	.badge-hr-route {
-		font-size: 0.625rem;
-		padding: 1px 6px;
-		border-radius: 9999px;
-		background: rgba(245, 158, 11, 0.18);
-		color: var(--warning);
-		font-weight: 600;
-		white-space: nowrap;
-		flex-shrink: 0;
-	}
-
 	.policy-card-hr {
 		border-color: rgba(245, 158, 11, 0.35);
-	}
-
-	.policy-ifaces {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 4px;
-	}
-
-	.badge-iface {
-		font-size: 0.6875rem;
-		padding: 2px 8px;
-		border-radius: 9999px;
-		background: var(--bg-hover);
-		color: var(--text-primary);
-		border: 1px solid var(--border);
-		white-space: nowrap;
 	}
 
 	.policy-actions {
