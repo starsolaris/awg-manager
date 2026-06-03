@@ -4,7 +4,7 @@
 	import { api } from '$lib/api/client';
 	import type { Subscription } from '$lib/types';
 	import { PageContainer, PageHeader, LoadingSpinner } from '$lib/components/layout';
-	import { Tabs, GridListToggle } from '$lib/components/ui';
+	import { Tabs, LayoutViewToggle } from '$lib/components/ui';
 	import SubscriptionMembersTab from '$lib/components/subscriptions/SubscriptionMembersTab.svelte';
 	import SubscriptionSettingsTab from '$lib/components/subscriptions/SubscriptionSettingsTab.svelte';
 	import { usageLevel } from '$lib/stores/settings';
@@ -276,7 +276,7 @@
 			{#if active === 'members'}
 				{#if subscription.memberTags.length > 0 && showSingboxLayoutPicker}
 					<div class="members-toolbar">
-						<GridListToggle
+						<LayoutViewToggle
 							value={singboxEffectiveLayout}
 							showListOption={showSingboxGridListToggle}
 							showDenseOption={false}

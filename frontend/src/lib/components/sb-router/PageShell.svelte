@@ -11,6 +11,7 @@
   import StatusDrawer from './StatusDrawer.svelte';
   import SourceDrawer from './SourceDrawer.svelte';
   import LiveConnectionsChip from './LiveConnectionsChip.svelte';
+  import { SegmentedControl } from '$lib/components/ui';
 
   interface Props {
     /** Дополнительный subtitle под title (опционально). */
@@ -65,22 +66,15 @@
         {/if}
       </div>
 
-      <div class="view-mode-switch" role="group" aria-label="Режим интерфейса">
-        <button
-          type="button"
-          class="view-mode-btn"
-          class:active={currentMode === 'beginner'}
-          aria-pressed={currentMode === 'beginner'}
-          onclick={() => selectMode('beginner')}
-        >Простой</button>
-        <button
-          type="button"
-          class="view-mode-btn"
-          class:active={currentMode === 'expert'}
-          aria-pressed={currentMode === 'expert'}
-          onclick={() => selectMode('expert')}
-        >Эксперт</button>
-      </div>
+      <SegmentedControl
+        value={currentMode}
+        options={[
+          { value: 'beginner', label: 'Простой' },
+          { value: 'expert', label: 'Эксперт' },
+        ] satisfies Array<{ value: RouterMode; label: string }>}
+        ariaLabel="Режим интерфейса"
+        onchange={selectMode}
+      />
     </div>
   </header>
 
@@ -129,7 +123,7 @@
   .header-tools :global(.chip),
   .params-btn,
   .header-actions .icon-btn,
-  .view-mode-switch {
+  .header-tools :global(.segmented-control) {
     height: 32px;
     box-sizing: border-box;
   }
@@ -185,53 +179,6 @@
     flex-shrink: 0;
   }
 
-  .view-mode-switch {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 2px;
-    border: 1px solid var(--color-border, var(--border));
-    border-radius: var(--radius-sm);
-    background: var(--color-bg-secondary, var(--bg-secondary));
-    flex-shrink: 0;
-  }
-
-  .view-mode-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: 26px;
-    padding: 0 12px;
-    border: none;
-    border-radius: calc(var(--radius-sm) - 2px);
-    background: transparent;
-    color: var(--color-text-muted, var(--text-muted));
-    font-size: 12px;
-    font-weight: 500;
-    font-family: inherit;
-    cursor: pointer;
-    white-space: nowrap;
-    transition:
-      background var(--t-fast) ease,
-      color var(--t-fast) ease;
-  }
-
-  .view-mode-btn:hover {
-    background: var(--color-bg-hover, var(--bg-tertiary));
-    color: var(--color-text-primary, var(--text-primary));
-  }
-
-  .view-mode-btn.active {
-    background: var(--color-accent-tint, var(--accent-soft));
-    color: var(--color-accent, var(--accent));
-    font-weight: 600;
-  }
-
-  .view-mode-btn:focus-visible {
-    outline: 2px solid var(--color-accent, var(--accent));
-    outline-offset: 2px;
-  }
-
   .sb-body { width: 100%; }
 
   @media (max-width: 768px) {
@@ -254,12 +201,12 @@
     }
     .params-btn,
     .header-tools :global(.chip),
-    .view-mode-switch {
+    .header-tools :global(.segmented-control) {
       width: 100%;
       flex: none;
       justify-content: center;
     }
-    .view-mode-btn {
+    .header-tools :global(.segmented-control-btn) {
       flex: 1;
       min-width: 0;
     }
@@ -289,14 +236,14 @@
 
     .header-tools :global(.chip),
     .params-btn,
-    .view-mode-switch {
+    .header-tools :global(.segmented-control) {
       width: 100%;
       flex: none;
       min-width: 0;
       justify-content: center;
     }
 
-    .view-mode-btn {
+    .header-tools :global(.segmented-control-btn) {
       flex: 1;
       min-width: 0;
     }

@@ -1214,7 +1214,7 @@ label {
 /* Sing-box layout picker — hidden below 760px (see TUNNEL_MOBILE_LAYOUT_MAX_WIDTH_PX) */
 @media (max-width: 760px) {
 	.members-toolbar,
-	.tunnels-toolbar .toolbar-actions > .view-mode-switch {
+	.tunnels-toolbar .toolbar-actions > .segmented-control {
 		display: none !important;
 	}
 }

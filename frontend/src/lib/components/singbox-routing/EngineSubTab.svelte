@@ -6,6 +6,7 @@
 	import type { RouterPolicy, SingboxRouterWANInterface } from '$lib/types';
 	import {
 		Toggle,
+		SegmentedControl,
 		Dropdown,
 		Button,
 		Card,
@@ -409,24 +410,16 @@
 			{#if settings}
 				<div class="device-mode-block">
 					<div class="control-label">Устройства</div>
-					<div class="mode-switch" role="group" aria-label="Режим устройств">
-						<button
-							type="button"
-							class:active={deviceMode === 'policy'}
-							onclick={() => setDeviceMode('policy')}
-							disabled={busy}
-						>
-							Только policy
-						</button>
-						<button
-							type="button"
-							class:active={deviceMode === 'all'}
-							onclick={() => setDeviceMode('all')}
-							disabled={busy}
-						>
-							Все устройства
-						</button>
-					</div>
+					<SegmentedControl
+						value={deviceMode}
+						options={[
+							{ value: 'policy', label: 'Только policy' },
+							{ value: 'all', label: 'Все устройства' },
+						] satisfies Array<{ value: 'policy' | 'all'; label: string }>}
+						ariaLabel="Режим устройств"
+						disabled={busy}
+						onchange={(mode) => setDeviceMode(mode)}
+					/>
 					<div class="setting-description">
 						{deviceMode === 'all'
 							? 'PREROUTING правила применяются без NDMS policy mark.'
@@ -765,33 +758,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
-	}
-	.mode-switch {
-		display: inline-flex;
-		width: fit-content;
-		padding: 3px;
-		gap: 2px;
-		border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
-		border-radius: var(--radius-sm);
-		background: var(--color-bg-secondary);
-	}
-	.mode-switch button {
-		border: 0;
-		border-radius: 4px;
-		background: transparent;
-		color: var(--color-text-secondary);
-		padding: 0.4rem 0.65rem;
-		font-size: 0.82rem;
-		cursor: pointer;
-	}
-	.mode-switch button.active {
-		background: var(--color-bg-tertiary);
-		color: var(--color-text-primary);
-		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent, #6ea8ff) 32%, transparent);
-	}
-	.mode-switch button:disabled {
-		cursor: not-allowed;
-		opacity: 0.65;
 	}
 	.sniffer-row {
 		display: flex;
