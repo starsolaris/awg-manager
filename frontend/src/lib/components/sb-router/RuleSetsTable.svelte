@@ -153,7 +153,7 @@
   }
   .header, .row {
     display: grid;
-    grid-template-columns: 150px 76px minmax(0, 1fr) 84px 76px;
+    grid-template-columns: 150px 76px minmax(0, 1fr) 84px 88px;
     padding: 7px 14px;
     align-items: center;
     gap: 8px;
@@ -211,6 +211,8 @@
   }
   .actions {
     display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
     justify-content: flex-end;
     gap: 4px;
   }
@@ -330,6 +332,12 @@
 
     .actions-col {
       text-align: left;
+    }
+
+    .route-action-btn {
+      min-width: 32px;
+      min-height: 32px;
+      padding: 6px;
     }
   }
   /* Bare mode для embed внутри SidePanel — parent даёт chrome */

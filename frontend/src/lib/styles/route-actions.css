@@ -1,6 +1,7 @@
 /* Shared CRUD action buttons for routing / NDMS / sing-box router views */
 .route-action-btn {
 	--route-action-color: var(--color-text-primary, var(--text-primary));
+	box-sizing: border-box;
 	background: var(--color-bg-primary, var(--bg-primary));
 	border: none;
 	color: var(--color-text-secondary, var(--text-muted));
@@ -11,6 +12,9 @@
 	align-items: center;
 	justify-content: center;
 	flex-shrink: 0;
+	min-width: 31px;
+	min-height: 31px;
+	line-height: 0;
 	transition: background 0.15s ease, color 0.15s ease;
 }
 

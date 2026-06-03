@@ -201,7 +201,7 @@
   }
   .header, .row {
     display: grid;
-    grid-template-columns: 24px 64px 92px minmax(0, 1fr) minmax(72px, 160px) 76px;
+    grid-template-columns: 24px 64px 92px minmax(0, 1fr) minmax(72px, 160px) 88px;
     align-items: center;
     gap: 8px;
     padding: 8px 14px;
@@ -294,6 +294,8 @@
   }
   .actions {
     display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
     justify-content: flex-end;
     gap: 4px;
   }
@@ -420,17 +422,22 @@
       text-transform: uppercase;
       letter-spacing: 0.04em;
     }
-    .route-reorder-btn,
+    .route-reorder-btn {
+      width: 32px;
+      min-width: 32px;
+      min-height: 32px;
+      padding: 6px;
+    }
     .route-action-btn {
-      width: 28px;
-      min-width: 28px;
-      height: 24px;
-      min-height: 24px;
+      width: 32px;
+      min-width: 32px;
+      min-height: 32px;
+      padding: 6px;
     }
     .route-reorder-btn :global(svg),
     .route-action-btn :global(svg) {
-      width: 13px;
-      height: 13px;
+      width: 14px;
+      height: 14px;
     }
   }
   /* Bare mode для embed внутри SidePanel — parent даёт chrome */
