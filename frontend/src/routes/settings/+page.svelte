@@ -1009,6 +1009,7 @@ onMount(() => {
 		gap: 0.375rem;
 		flex-shrink: 0;
 		align-items: center;
+		justify-content: flex-end;
 	}
 
 	@media (min-width: 641px) {
@@ -1142,6 +1143,18 @@ onMount(() => {
 			min-width: 0;
 		}
 
+		.actions-card > .setting-row:has(.action-buttons) {
+			flex-direction: column;
+			align-items: stretch;
+			flex-wrap: nowrap;
+			gap: 0.625rem;
+		}
+
+		.actions-card > .setting-row:has(.action-buttons) > *:first-child {
+			flex: initial;
+			width: 100%;
+		}
+
 		.actions-card > .setting-row {
 			flex-direction: row;
 			align-items: center;
@@ -1156,7 +1169,8 @@ onMount(() => {
 
 		.action-buttons {
 			justify-content: flex-end;
-			flex-wrap: nowrap;
+			flex-wrap: wrap;
+			width: 100%;
 		}
 	}
 
