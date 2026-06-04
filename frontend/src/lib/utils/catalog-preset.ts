@@ -14,6 +14,11 @@ export function dnsRouteCatalogPresetFilter(p: CatalogPreset): boolean {
 	return !!p.engines.dns;
 }
 
+/** sing-box router: presets with a singbox engine (same set as ListPresets). */
+export function singboxRouterCatalogPresetFilter(p: CatalogPreset): boolean {
+	return !!p.engines.singbox;
+}
+
 export function splitPresetDnsEntries(p: CatalogPreset): {
 	domainLines: string[];
 	cidrLines: string[];

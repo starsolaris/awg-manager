@@ -25,6 +25,8 @@
         hydrarouteInstalled?: boolean;
         /** When false, only one preset can be selected (HR Neo). */
         multiple?: boolean;
+        /** Pre-select when opening (e.g. sing-box router wizard). */
+        initialSelectedIds?: string[];
         confirmLabel?: string;
         submitting?: boolean;
         onclose: () => void;
@@ -49,6 +51,7 @@
         isOS5 = false,
         hydrarouteInstalled = false,
         multiple = true,
+        initialSelectedIds = [],
         confirmLabel,
         submitting = false,
         onclose,
@@ -139,7 +142,7 @@
 
     $effect(() => {
         if (open && !wasOpen) {
-            selected = new Set();
+            selected = new Set(initialSelectedIds);
             defaultTunnelId = tunnels.find((t) => t.available)?.id ?? '';
             backend = isOS5 ? 'ndms' : hydrarouteInstalled ? 'hydraroute' : 'ndms';
             query = '';

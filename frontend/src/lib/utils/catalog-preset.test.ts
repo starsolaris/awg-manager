@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { CatalogPreset } from '$lib/types';
-import { hrNeoCatalogPresetFilter, splitPresetDnsEntries } from './catalog-preset';
+import {
+	hrNeoCatalogPresetFilter,
+	singboxRouterCatalogPresetFilter,
+	splitPresetDnsEntries,
+} from './catalog-preset';
 
 const base = {
 	id: 'x',
@@ -36,5 +40,23 @@ describe('hrNeoCatalogPresetFilter', () => {
 			engines: { dns: { subnets: ['10.0.0.0/8'] } },
 		};
 		expect(hrNeoCatalogPresetFilter(p)).toBe(true);
+	});
+});
+
+describe('singboxRouterCatalogPresetFilter', () => {
+	it('accepts presets with singbox engine', () => {
+		const p: CatalogPreset = {
+			...base,
+			engines: { singbox: { action: 'route', ruleSets: [] } },
+		};
+		expect(singboxRouterCatalogPresetFilter(p)).toBe(true);
+	});
+
+	it('rejects dns-only presets', () => {
+		const p: CatalogPreset = {
+			...base,
+			engines: { dns: { domains: ['a.com'] } },
+		};
+		expect(singboxRouterCatalogPresetFilter(p)).toBe(false);
 	});
 });
