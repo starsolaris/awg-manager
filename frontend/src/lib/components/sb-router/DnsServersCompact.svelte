@@ -99,14 +99,18 @@
               title={`${matcherSummary(r)} → ${tgt.label}`}
             >
               <span class="rule-match">{matcherSummary(r)}</span>
-              <span class="rule-arrow">→</span>
-              <span
-                class="rule-server mono"
-                class:block={tgt.kind === 'block'}
-                class:none={tgt.kind === 'none'}
-              >
-                {tgt.label}
-              </span>
+              <span class="rule-arrow" aria-hidden="true">→</span>
+              {#if tgt.kind === 'block'}
+                <span class="rule-target">
+                  <Badge variant="error" size="sm" mono>{tgt.label}</Badge>
+                </span>
+              {:else if tgt.kind === 'none'}
+                <span class="rule-target none">{tgt.label}</span>
+              {:else}
+                <span class="rule-target" title={tgt.label}>
+                  <Badge variant="accent" size="sm" mono>{tgt.label}</Badge>
+                </span>
+              {/if}
             </button>
 
             <div class="rule-actions">
@@ -238,9 +242,10 @@
   }
   .rule-content {
     min-width: 0;
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(4.5rem, max-content);
     align-items: center;
-    gap: 0.35rem;
+    column-gap: 0.35rem;
     background: transparent;
     border: 0;
     padding: 0;
@@ -250,37 +255,37 @@
     cursor: pointer;
   }
   .rule-match {
-    flex: 1 1 auto;
+    grid-column: 1;
     min-width: 0;
     color: var(--text);
     font-size: 12px;
-    line-height: 1.25;
+    line-height: 1.35;
     white-space: normal;
     overflow-wrap: anywhere;
   }
   .rule-arrow {
-    flex: 0 0 auto;
+    grid-column: 2;
+    flex-shrink: 0;
     color: var(--muted-text);
     line-height: 1;
     opacity: 0.85;
-    transform: translateY(-0.02em);
   }
-  .rule-server {
-    flex: 0 1 6.5rem;
+  .rule-target {
+    grid-column: 3;
+    justify-self: end;
+    max-width: 10rem;
     min-width: 0;
-    color: var(--accent);
-    font-size: 12px;
-    line-height: 1.25;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    word-break: normal;
+    overflow: hidden;
   }
-  .rule-server.block {
-    color: var(--text-secondary);
-    font-weight: 600;
+  .rule-target :global(.badge) {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .rule-server.none {
+  .rule-target.none {
     color: var(--text-muted);
+    font-size: 12px;
   }
   .rule-actions {
     display: inline-flex;
@@ -300,33 +305,37 @@
   @media (max-width: 720px) {
     .rule-row {
       grid-template-columns: minmax(0, 1fr) auto;
-      align-items: center;
+      align-items: start;
       gap: 0.5rem;
       padding: 0.65rem 0.75rem;
       border: 1px solid var(--border);
     }
 
     .rule-content {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.3rem;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas:
+        'match'
+        'target';
+      row-gap: 0.35rem;
     }
 
     .rule-match {
-      flex: 1 1 100%;
+      grid-area: match;
     }
 
     .rule-arrow {
-      flex: 0 0 auto;
+      display: none;
     }
 
-    .rule-server {
-      flex: 1 1 auto;
+    .rule-target {
+      grid-area: target;
+      grid-column: auto;
+      justify-self: start;
+      max-width: 100%;
     }
 
     .rule-actions {
-      align-self: center;
+      align-self: start;
     }
   }
 </style>

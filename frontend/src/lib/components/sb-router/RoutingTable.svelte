@@ -150,27 +150,25 @@
           </button>
         {/if}
       </div>
+      <div class="action-badge-cell">
+        <span class="mobile-label">Действие</span>
+        <Badge variant={row.actionVariant} size="sm" mono>{row.actionLabel}</Badge>
+      </div>
       <div class="matchers" title={row.matchers}>
         <span class="mobile-label">Условия</span>
         <span class="matcher-text">{row.matchers}</span>
       </div>
-      <div class="badges-line">
-        <div class="action-badge-cell">
-          <span class="mobile-label">Действие</span>
-          <Badge variant={row.actionVariant} size="sm" mono>{row.actionLabel}</Badge>
-        </div>
-        <div class="outbound-cell">
-          <span class="mobile-label">Выход</span>
-          {#if row.outboundKind === 'none'}
-            <span class="dash">—</span>
-          {:else if row.outboundKind === 'direct'}
-            <Badge variant="muted" mono size="sm">direct</Badge>
-          {:else if row.outboundKind === 'reject'}
-            <Badge variant="error" mono size="sm">reject</Badge>
-          {:else}
-            <Badge variant={row.outboundVariant} mono size="sm" title={row.outbound}>{row.outboundLabel}</Badge>
-          {/if}
-        </div>
+      <div class="outbound-cell">
+        <span class="mobile-label">Выход</span>
+        {#if row.outboundKind === 'none'}
+          <span class="dash">—</span>
+        {:else if row.outboundKind === 'direct'}
+          <Badge variant="muted" mono size="sm">direct</Badge>
+        {:else if row.outboundKind === 'reject'}
+          <Badge variant="error" mono size="sm">reject</Badge>
+        {:else}
+          <Badge variant={row.outboundVariant} mono size="sm" title={row.outbound}>{row.outboundLabel}</Badge>
+        {/if}
       </div>
       <div class="actions-col actions">
         {#if !row.sys}
@@ -213,7 +211,7 @@
   .header,
   .row {
     display: grid;
-    grid-template-columns: 24px 64px 104px minmax(0, 1fr) minmax(72px, 160px) 96px;
+    grid-template-columns: 24px 64px 92px minmax(0, 1fr) minmax(96px, 180px) 80px;
     align-items: center;
     gap: 8px;
     padding: 8px 14px;
@@ -233,17 +231,16 @@
   .header > div:nth-child(2),
   .header > div:nth-child(3),
   .row > .reorder,
-  .action-badge-cell,
-  .header > div:nth-child(4),
+  .row > .action-badge-cell,
   .header > div:nth-child(5),
-  .outbound-cell {
+  .row > .outbound-cell {
     text-align: center;
   }
   .header > div:nth-child(5),
-  .outbound-cell {
+  .row > .outbound-cell {
     min-width: 0;
   }
-  .outbound-cell {
+  .row > .outbound-cell {
     justify-self: center;
   }
   .row > .matchers {
@@ -295,9 +292,6 @@
     display: none;
   }
   .matcher-text {
-    display: contents;
-  }
-  .badges-line {
     display: contents;
   }
   .action-badge-cell {
@@ -445,29 +439,24 @@
       justify-content: flex-end;
       gap: 4px;
     }
-    .badges-line {
-      grid-area: badges;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: flex-start;
-      gap: 0.4rem;
-      min-width: 0;
-      width: 100%;
-    }
     .action-badge-cell,
     .outbound-cell {
-      grid-area: auto;
+      grid-area: badges;
       display: inline-flex;
-      flex: 0 1 auto;
       align-items: center;
-      justify-content: flex-start;
       gap: 0.35rem;
       min-width: 0;
       max-width: 100%;
       text-align: left;
-      justify-self: auto;
       overflow: visible;
+    }
+    .action-badge-cell {
+      justify-self: start;
+      justify-content: flex-start;
+    }
+    .outbound-cell {
+      justify-self: end;
+      justify-content: flex-end;
     }
     .outbound-cell :global(.badge) {
       max-width: 100%;
