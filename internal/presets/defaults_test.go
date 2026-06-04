@@ -82,3 +82,47 @@ func TestDefaultsCatalogInvariants(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultsCatalogCovers(t *testing.T) {
+	ps, err := LoadBuiltins()
+	if err != nil {
+		t.Fatalf("LoadBuiltins: %v", err)
+	}
+	ids := map[string]bool{}
+	for _, p := range ps {
+		ids[p.ID] = true
+	}
+	for _, p := range ps {
+		for _, child := range p.Covers {
+			if !ids[child] {
+				t.Errorf("preset %q covers unknown id %q", p.ID, child)
+			}
+			if child == p.ID {
+				t.Errorf("preset %q must not cover itself", p.ID)
+			}
+		}
+	}
+	wantParents := map[string]int{
+		"category-ai":     6,
+		"category-games":  10,
+		"category-media":  12,
+		"meta":            4,
+		"dev-tools":       3,
+		"google":          2,
+	}
+	for id, n := range wantParents {
+		var found *Preset
+		for i := range ps {
+			if ps[i].ID == id {
+				found = &ps[i]
+				break
+			}
+		}
+		if found == nil {
+			t.Fatalf("expected preset %q", id)
+		}
+		if len(found.Covers) != n {
+			t.Errorf("preset %q covers: got %d want %d (%v)", id, len(found.Covers), n, found.Covers)
+		}
+	}
+}

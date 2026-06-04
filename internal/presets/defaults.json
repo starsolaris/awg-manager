@@ -199,7 +199,15 @@
         ],
         "action": "tunnel"
       }
-    }
+    },
+    "covers": [
+      "anthropic",
+      "copilot",
+      "gemini",
+      "grok",
+      "openai",
+      "perplexity"
+    ]
   },
   {
     "id": "copilot",
@@ -1638,7 +1646,12 @@
           "suno.com"
         ]
       }
-    }
+    },
+    "covers": [
+      "docker",
+      "github",
+      "npm"
+    ]
   },
   {
     "id": "docker",
@@ -2676,7 +2689,19 @@
         ],
         "action": "tunnel"
       }
-    }
+    },
+    "covers": [
+      "blizzard",
+      "ea",
+      "epicgames",
+      "nintendo",
+      "oculus",
+      "playstation",
+      "roblox",
+      "steam",
+      "ubisoft",
+      "xbox"
+    ]
   },
   {
     "id": "ea",
@@ -3802,7 +3827,21 @@
         ],
         "action": "tunnel"
       }
-    }
+    },
+    "covers": [
+      "bbc",
+      "deezer",
+      "disney",
+      "hbo",
+      "hulu",
+      "netflix",
+      "primevideo",
+      "soundcloud",
+      "spotify",
+      "tidal",
+      "twitch",
+      "vimeo"
+    ]
   },
   {
     "id": "deezer",
@@ -5090,7 +5129,11 @@
         ],
         "action": "tunnel"
       }
-    }
+    },
+    "covers": [
+      "google-play",
+      "youtube"
+    ]
   },
   {
     "id": "google-play",
@@ -5197,7 +5240,13 @@
         ],
         "action": "tunnel"
       }
-    }
+    },
+    "covers": [
+      "facebook",
+      "instagram",
+      "threads",
+      "whatsapp"
+    ]
   },
   {
     "id": "patreon",

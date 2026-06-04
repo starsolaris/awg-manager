@@ -1,5 +1,8 @@
 import type { CatalogPreset } from '$lib/types';
 
+/** Preset with optional composite covers (catalog + sing-box router). */
+export type PresetCoverRef = Pick<CatalogPreset, 'id' | 'name' | 'covers'>;
+
 /** Inline DNS entries above this — warn in NDMS / HR Neo pickers. */
 export const DNS_LARGE_LIST_THRESHOLD = 300;
 
@@ -28,6 +31,52 @@ export function catalogPresetCardNotice(
 	}
 	if (p.notice?.trim()) parts.push(p.notice.trim());
 	return parts.length > 0 ? parts.join('\n\n') : undefined;
+}
+
+/** Remove child ids when a composite parent is already selected. */
+export function normalizeCatalogSelection(
+	selected: Set<string>,
+	catalog: PresetCoverRef[],
+): Set<string> {
+	const next = new Set(selected);
+	for (const p of catalog) {
+		if (!next.has(p.id) || !p.covers?.length) continue;
+		for (const id of p.covers) next.delete(id);
+	}
+	return next;
+}
+
+/** Parent preset id that currently covers `presetId`, if any. */
+export function findCoveringPreset(
+	presetId: string,
+	selected: Set<string>,
+	catalog: PresetCoverRef[],
+): PresetCoverRef | undefined {
+	for (const p of catalog) {
+		if (selected.has(p.id) && p.covers?.includes(presetId)) return p;
+	}
+	return undefined;
+}
+
+/** Toggle one preset; selecting a parent drops covered children from the set. */
+export function applyPresetToggle(
+	selected: Set<string>,
+	presetId: string,
+	catalog: PresetCoverRef[],
+	multiple: boolean,
+): Set<string> {
+	if (!multiple) {
+		return selected.has(presetId) ? new Set() : new Set([presetId]);
+	}
+	const next = new Set(selected);
+	if (next.has(presetId)) {
+		next.delete(presetId);
+		return next;
+	}
+	next.add(presetId);
+	const preset = catalog.find((p) => p.id === presetId);
+	for (const id of preset?.covers ?? []) next.delete(id);
+	return next;
 }
 
 /** HR Neo: only presets with inline domain/CIDR lists (no subscription-only lists). */

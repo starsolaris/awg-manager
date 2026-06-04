@@ -3,8 +3,11 @@ import type { CatalogPreset } from '$lib/types';
 import {
 	DNS_LARGE_LIST_THRESHOLD,
 	DNS_LARGE_LIST_NOTICE,
+	applyPresetToggle,
 	catalogPresetCardNotice,
+	findCoveringPreset,
 	hrNeoCatalogPresetFilter,
+	normalizeCatalogSelection,
 	presetDnsLargeListRisk,
 	singboxRouterCatalogPresetFilter,
 	splitPresetDnsEntries,
@@ -111,5 +114,29 @@ describe('singboxRouterCatalogPresetFilter', () => {
 			engines: { dns: { domains: ['a.com'] } },
 		};
 		expect(singboxRouterCatalogPresetFilter(p)).toBe(false);
+	});
+});
+
+describe('catalog covers selection', () => {
+	const catalog: CatalogPreset[] = [
+		{ ...base, id: 'meta', name: 'Meta', covers: ['instagram', 'whatsapp'], engines: {} },
+		{ ...base, id: 'instagram', name: 'Instagram', engines: {} },
+		{ ...base, id: 'whatsapp', name: 'WhatsApp', engines: {} },
+	];
+
+	it('drops covered children when parent is selected', () => {
+		const selected = new Set(['instagram', 'whatsapp']);
+		const next = applyPresetToggle(selected, 'meta', catalog, true);
+		expect([...next]).toEqual(['meta']);
+	});
+
+	it('normalizes an existing parent+child selection', () => {
+		const next = normalizeCatalogSelection(new Set(['meta', 'instagram']), catalog);
+		expect([...next]).toEqual(['meta']);
+	});
+
+	it('finds covering preset for a child', () => {
+		const parent = findCoveringPreset('instagram', new Set(['meta']), catalog);
+		expect(parent?.id).toBe('meta');
 	});
 });

@@ -5,8 +5,11 @@
     import { buildRoutingTunnelDropdownOptions } from '$lib/utils/routingTunnelOptions';
     import { pluralize, SERVICE_WORDS } from '$lib/utils/pluralize';
     import {
+        applyPresetToggle,
         catalogPresetCardNotice,
         dnsRouteCatalogPresetFilter,
+        findCoveringPreset,
+        normalizeCatalogSelection,
         presetDnsLargeListRisk,
     } from '$lib/utils/catalog-preset';
     import type { RoutingTunnel, CatalogPreset } from '$lib/types';
@@ -161,7 +164,7 @@
 
     $effect(() => {
         if (open && !wasOpen) {
-            selected = new Set(initialSelectedIds);
+            selected = normalizeCatalogSelection(new Set(initialSelectedIds), sortedPresets);
             defaultTunnelId = tunnels.find((t) => t.available)?.id ?? '';
             backend = isOS5 ? 'ndms' : hydrarouteInstalled ? 'hydraroute' : 'ndms';
             query = '';
@@ -183,17 +186,11 @@
     }
 
     function toggle(presetId: string) {
-        if (!multiple) {
-            selected = selected.has(presetId) ? new Set() : new Set([presetId]);
-            return;
-        }
-        const next = new Set(selected);
-        if (next.has(presetId)) {
-            next.delete(presetId);
-        } else {
-            next.add(presetId);
-        }
-        selected = next;
+        selected = applyPresetToggle(selected, presetId, sortedPresets, multiple);
+    }
+
+    function coveringPreset(presetId: string) {
+        return findCoveringPreset(presetId, selected, sortedPresets);
     }
 
     function selectedPresets(): CatalogPreset[] {
@@ -271,6 +268,7 @@
                 <div class="preset-grid">
                     {#each filteredPresets as preset (preset.id)}
                         {@const added = isAdded(preset)}
+                        {@const coveredBy = coveringPreset(preset.id)}
                         {@const isSelected = selected.has(preset.id)}
                         {@const largeDnsWarn = noticeIsLargeList(preset)}
                         {@const cardNotice = noticeText(preset)}
@@ -279,16 +277,21 @@
                             class="preset-card"
                             class:selected={isSelected}
                             class:added
-                            title={cardNotice || undefined}
+                            class:covered={!!coveredBy}
+                            title={coveredBy
+                                ? `Уже включено в «${coveredBy.name}»`
+                                : cardNotice || undefined}
                             onclick={() => {
-                                if (!added) toggle(preset.id);
+                                if (!added && !coveredBy) toggle(preset.id);
                             }}
-                            disabled={added || submitting}
+                            disabled={added || !!coveredBy || submitting}
                         >
                             {#if isSelected}
                                 <span class="preset-check">&#10003;</span>
                             {:else if added}
                                 <span class="preset-badge">добавлено</span>
+                            {:else if coveredBy}
+                                <span class="preset-badge">в {coveredBy.name}</span>
                             {/if}
                             {#if largeDnsWarn}
                                 <span
@@ -518,6 +521,11 @@
 
     .preset-card.added {
         opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .preset-card.covered {
+        opacity: 0.45;
         cursor: not-allowed;
     }
 
