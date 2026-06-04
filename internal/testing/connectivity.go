@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	connectivityURL         = "http://connectivitycheck.gstatic.com/generate_204"
 	connectivityTestTimeout = 7 * time.Second
 )
+
+var connectivityHTTPClient httpclient.HTTPDoer = httpclient.DefaultClient
 
 // CheckConnectivity performs quick connectivity test through tunnel.
 func (s *Service) CheckConnectivity(ctx context.Context, tunnelID string) (*ConnectivityResult, error) {
@@ -56,10 +57,11 @@ func (s *Service) checkHTTP(ctx context.Context, tunnelID string) (*Connectivity
 	testCtx, cancel := context.WithTimeout(ctx, connectivityTestTimeout)
 	defer cancel()
 
-	s.appLog.Full("http-check", tunnelID, fmt.Sprintf("Executing HTTP check: %s", connectivityURL))
+	checkURL := s.connectivityCheckURL()
+	s.appLog.Full("http-check", tunnelID, fmt.Sprintf("Executing HTTP check: %s", checkURL))
 
-	res, err := httpclient.DefaultClient.Do(testCtx, httpclient.CallConfig{
-		URL:            connectivityURL,
+	res, err := connectivityHTTPClient.Do(testCtx, httpclient.CallConfig{
+		URL:            checkURL,
 		Interface:      iface,
 		ConnectTimeout: 3 * time.Second,
 		MaxTime:        5 * time.Second,
@@ -82,12 +84,12 @@ func (s *Service) checkHTTP(ctx context.Context, tunnelID string) (*Connectivity
 	}
 
 	// Minimum 1 ms display.
-	if res.Metrics.HTTPCode == 204 && latencyMs <= 0 {
+	if isConnectivitySuccessCode(res.Metrics.HTTPCode) && latencyMs <= 0 {
 		latencyMs = 1
 	}
 
-	if res.Metrics.HTTPCode == 204 {
-		s.appLog.Debug("http-check", tunnelID, fmt.Sprintf("HTTP check successful: code=204, latency=%dms", latencyMs))
+	if isConnectivitySuccessCode(res.Metrics.HTTPCode) {
+		s.appLog.Debug("http-check", tunnelID, fmt.Sprintf("HTTP check successful: code=%d, latency=%dms", res.Metrics.HTTPCode, latencyMs))
 		return &ConnectivityResult{Connected: true, Latency: &latencyMs}, nil
 	}
 
@@ -150,6 +152,21 @@ func (s *Service) checkPing(ctx context.Context, tunnelID string, stored *storag
 // intPtr returns a pointer to an int.
 func intPtr(i int) *int {
 	return &i
+}
+
+func (s *Service) connectivityCheckURL() string {
+	if s == nil || s.settings == nil {
+		return storage.DefaultConnectivityCheckURL
+	}
+	settings, err := s.settings.Get()
+	if err != nil || settings == nil || strings.TrimSpace(settings.ConnectivityCheckURL) == "" {
+		return storage.DefaultConnectivityCheckURL
+	}
+	return strings.TrimSpace(settings.ConnectivityCheckURL)
+}
+
+func isConnectivitySuccessCode(code int) bool {
+	return code >= 200 && code < 400
 }
 
 // autoDetectGateway derives a likely gateway IP from the tunnel address (e.g. 10.0.0.2/32 → 10.0.0.1).
@@ -240,11 +257,22 @@ func (s *Service) checkHandshake(tunnelID string) (*ConnectivityResult, error) {
 // CheckConnectivityByInterface performs connectivity test using a kernel interface name directly.
 // Used for system tunnels where we don't have a managed tunnel ID.
 func CheckConnectivityByInterface(ctx context.Context, ifaceName string) *ConnectivityResult {
+	return CheckConnectivityByInterfaceURL(ctx, ifaceName, storage.DefaultConnectivityCheckURL)
+}
+
+// CheckConnectivityByInterfaceURL performs connectivity test using a kernel
+// interface name directly and the supplied HTTP check URL.
+func CheckConnectivityByInterfaceURL(ctx context.Context, ifaceName string, checkURL string) *ConnectivityResult {
 	testCtx, cancel := context.WithTimeout(ctx, connectivityTestTimeout)
 	defer cancel()
 
-	res, err := httpclient.DefaultClient.Do(testCtx, httpclient.CallConfig{
-		URL:            connectivityURL,
+	checkURL = strings.TrimSpace(checkURL)
+	if checkURL == "" {
+		checkURL = storage.DefaultConnectivityCheckURL
+	}
+
+	res, err := connectivityHTTPClient.Do(testCtx, httpclient.CallConfig{
+		URL:            checkURL,
 		Interface:      ifaceName,
 		ConnectTimeout: 3 * time.Second,
 		MaxTime:        5 * time.Second,
@@ -264,11 +292,11 @@ func CheckConnectivityByInterface(ctx context.Context, ifaceName string) *Connec
 		latencyMs = int(res.Metrics.TimeTotal * 1000)
 	}
 
-	if res.Metrics.HTTPCode == 204 && latencyMs <= 0 {
+	if isConnectivitySuccessCode(res.Metrics.HTTPCode) && latencyMs <= 0 {
 		latencyMs = 1
 	}
 
-	if res.Metrics.HTTPCode == 204 {
+	if isConnectivitySuccessCode(res.Metrics.HTTPCode) {
 		return &ConnectivityResult{
 			Connected: true,
 			Latency:   &latencyMs,
