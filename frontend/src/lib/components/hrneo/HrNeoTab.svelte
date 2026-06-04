@@ -1,3 +1,10 @@
+<script lang="ts" module>
+	import type { SidebarSelection } from './HrNeoTargetSidebar.svelte';
+
+	/** Survives tab unmount on /routing so sidebar target/service selection is restored. */
+	let persistedSelection: SidebarSelection = null;
+</script>
+
 <script lang="ts">
 	import { api } from '$lib/api/client';
 	import type {
@@ -10,7 +17,7 @@
 	} from '$lib/types';
 	import { notifications } from '$lib/stores/notifications';
 	import { Modal, StoreStatusBadge, Button } from '$lib/components/ui';
-	import { dnsRoutesStore, invalidateAllRouting } from '$lib/stores/routing';
+	import { dnsRoutesStore, invalidateAllRouting, routingTunnelsStore } from '$lib/stores/routing';
 	import { InterfaceList } from '$lib/components/accesspolicy';
 	import HrNeoTargetSidebar, {
 		type TargetEntry,
@@ -60,7 +67,17 @@
 	});
 
 	let geoFiles = $state<GeoFileEntry[]>([]);
-	let selection = $state<SidebarSelection>(null);
+	// svelte-ignore state_referenced_locally
+	let selection = $state<SidebarSelection>(persistedSelection);
+
+	$effect(() => {
+		persistedSelection = selection;
+	});
+
+	let hrNeoDataReady = $derived(
+		($dnsRoutesStore.lastFetchedAt > 0 || $dnsRoutesStore.status === 'error') &&
+			($routingTunnelsStore.lastFetchedAt > 0 || $routingTunnelsStore.status === 'error'),
+	);
 
 	let editOpen = $state(false);
 	let editingRule = $state<DnsRoute | null>(null);
@@ -252,12 +269,22 @@
 
 	let geositeFiles = $derived(geoFiles.filter((g) => g.type === 'geosite').map((g) => g.path));
 	let geoipFiles = $derived(geoFiles.filter((g) => g.type === 'geoip').map((g) => g.path));
-	// Auto-select first target (or settings) when none is selected
+	// Auto-select first target (policy or interface) or settings once routing
+	// data is known. Without the ready gate, a cold ?tab=hrneo load sees
+	// targets=[] briefly and sticks on settings even after rules arrive.
 	$effect(() => {
-		if (!selection) {
-			if (targets.length > 0) selection = { type: 'target', name: targets[0].name };
-			else selection = { type: 'service', item: 'settings' };
-		}
+		if (selection) return;
+		if (!hrNeoDataReady) return;
+		if (targets.length > 0) selection = { type: 'target', name: targets[0].name };
+		else selection = { type: 'service', item: 'settings' };
+	});
+
+	// Drop a stale persisted target (policy or interface) if it vanished.
+	$effect(() => {
+		if (selection?.type !== 'target') return;
+		if (!hrNeoDataReady) return;
+		if (targets.some((t) => t.name === selection.name)) return;
+		selection = null;
 	});
 
 	function openNewRule() {
