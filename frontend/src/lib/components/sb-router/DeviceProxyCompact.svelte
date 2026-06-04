@@ -6,7 +6,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Button, Badge } from '$lib/components/ui';
-  import { ChevronRight, Trash2 } from 'lucide-svelte';
+  import { ChevronRight, Trash2, Edit3 } from 'lucide-svelte';
   import { api } from '$lib/api/client';
   import type {
     DeviceProxyRuntime,
@@ -130,17 +130,31 @@
               </div>
             </div>
           </button>
-          {#if onDelete && in_.id !== 'default'}
-            <button
-              type="button"
-              class="route-action-btn danger"
-              onclick={() => onDelete(in_)}
-              aria-label={`Удалить inbound ${in_.name || in_.id}`}
-              title={`Удалить inbound «${in_.name || in_.id}»`}
-            >
-              <Trash2 size={15} />
-            </button>
-          {/if}
+          <div class="proxy-actions">
+            {#if onSelect}
+              <button
+                type="button"
+                class="route-action-btn"
+                onclick={() => onSelect(in_)}
+                aria-label={`Редактировать inbound ${in_.name || in_.id}`}
+                title={`Редактировать inbound «${in_.name || in_.id}»`}
+              >
+                <Edit3 size={15} />
+              </button>
+            {/if}
+
+            {#if onDelete && in_.id !== 'default'}
+              <button
+                type="button"
+                class="route-action-btn danger"
+                onclick={() => onDelete(in_)}
+                aria-label={`Удалить inbound ${in_.name || in_.id}`}
+                title={`Удалить inbound «${in_.name || in_.id}»`}
+              >
+                <Trash2 size={15} />
+              </button>
+            {/if}
+          </div>
         </div>
       {/each}
     </div>
@@ -279,6 +293,7 @@
     overflow: hidden;
   }
   .listen {
+    font-size: 12px;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -295,8 +310,15 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .proxy-row > .route-action-btn {
+  .proxy-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    min-width: 0;
     justify-self: end;
+  }
+  .proxy-actions > .route-action-btn {
     flex-shrink: 0;
   }
   .proxy-row > .proxy-click {
