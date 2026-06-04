@@ -1,8 +1,7 @@
 <script lang="ts">
 	import type { DnsRoute } from '$lib/types';
-	import { Button } from '$lib/components/ui';
 	import HrNeoRuleCard from './HrNeoRuleCard.svelte';
-	import CreateIcon from '$lib/components/ui/icons/CreateIcon.svelte';
+	import RoutingRuleAddMenu from '$lib/components/routing/RoutingRuleAddMenu.svelte';
 	import { pluralize, RULE_WORDS } from '$lib/utils/pluralize';
 
 	interface Props {
@@ -10,7 +9,8 @@
 		targetKind: 'policy' | 'interface';
 		rules: DnsRoute[];
 		brokenRuleIds?: Set<string>;
-		onaddrule: () => void;
+		oncatalog: () => void;
+		onmanual: () => void;
 		oneditrule: (rule: DnsRoute) => void;
 		ondeleterule: (rule: DnsRoute) => void;
 		oniconrule?: (rule: DnsRoute) => void;
@@ -21,7 +21,8 @@
 		targetKind,
 		rules,
 		brokenRuleIds = new Set(),
-		onaddrule,
+		oncatalog,
+		onmanual,
 		oneditrule,
 		ondeleterule,
 		oniconrule,
@@ -30,10 +31,6 @@
 	let sortedRules = $derived([...rules].sort((a, b) => a.name.localeCompare(b.name)));
 </script>
 
-{#snippet createIcon()}
-	<CreateIcon />
-{/snippet}
-
 <div class="hr-list">
 	<header class="list-header">
 		<div class="list-title">
@@ -41,9 +38,7 @@
 			<span class="kind-badge kind-{targetKind}">{targetKind}</span>
 			<span class="count">{pluralize(rules.length, RULE_WORDS)}</span>
 		</div>
-		<Button variant="primary" size="sm" onclick={onaddrule} iconBefore={createIcon}>
-			Добавить правило
-		</Button>
+		<RoutingRuleAddMenu label="Добавить правило" oncatalog={oncatalog} onmanual={onmanual} />
 	</header>
 
 	{#if sortedRules.length === 0}
@@ -150,8 +145,11 @@
 		.list-title {
 			flex: 1 1 100%;
 		}
-		.list-header :global(.btn) {
+		.list-header :global(.dropdown-wrapper) {
 			flex: 1 1 100%;
+		}
+		.list-header :global(.dropdown-wrapper .btn) {
+			width: 100%;
 		}
 	}
 </style>

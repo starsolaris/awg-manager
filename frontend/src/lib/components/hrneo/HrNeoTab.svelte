@@ -20,7 +20,9 @@
 	import HrNeoSettingsView from './HrNeoSettingsView.svelte';
 	import HrNeoDisabledTagsView from './HrNeoDisabledTagsView.svelte';
 	import HrNeoEditModal from './HrNeoEditModal.svelte';
-	import { IconPickerModal } from '$lib/components/dnsroutes';
+	import { IconPickerModal, ServiceCatalogModal } from '$lib/components/dnsroutes';
+	import type { CatalogPreset } from '$lib/types';
+	import { hrNeoCatalogPresetFilter } from '$lib/utils/catalog-preset';
 
 	interface Props {
 		dnsRoutes: DnsRoute[];
@@ -65,6 +67,8 @@
 	let editInitialTarget = $state<{ kind: 'interface' | 'policy'; name: string } | undefined>(
 		undefined,
 	);
+	let editInitialPreset = $state<CatalogPreset | null>(null);
+	let catalogOpen = $state(false);
 	let saving = $state(false);
 
 	let isMobile = $state(false);
@@ -201,17 +205,40 @@
 	function openNewRule() {
 		editingRule = null;
 		editInitialTarget = undefined;
+		editInitialPreset = null;
 		editOpen = true;
 	}
 
-	function openNewRuleForSelectedTarget() {
+	function openNewRuleForSelectedTarget(preset: CatalogPreset | null = null) {
 		editingRule = null;
 		if (selection?.type === 'target' && selectedTargetEntry) {
 			editInitialTarget = { kind: selectedTargetEntry.kind, name: selection.name };
 		} else {
 			editInitialTarget = undefined;
 		}
+		editInitialPreset = preset;
 		editOpen = true;
+	}
+
+	function openCatalogForTarget() {
+		catalogOpen = true;
+	}
+
+	function handleCatalogConfirm(presets: CatalogPreset[]) {
+		catalogOpen = false;
+		const preset = presets[0];
+		if (!preset) return;
+		openNewRuleForSelectedTarget(preset);
+	}
+
+	function openCatalogFromEdit() {
+		catalogOpen = true;
+	}
+
+	function handleCatalogPickFromEdit(presets: CatalogPreset[]) {
+		catalogOpen = false;
+		if (presets.length === 0) return;
+		editInitialPreset = presets[0];
 	}
 
 	function openEditRule(r: DnsRoute) {
@@ -245,14 +272,11 @@
 			} else {
 				await api.createDnsRoute(payload);
 			}
-			editOpen = false;
 			scheduleOversizedRefresh();
-			// HR Neo save may have created a fresh NDMS policy and/or permitted
-			// interfaces through the orchestrator. Those mutations don't flow
-			// through AccessPolicyHandler, so no automatic SSE snapshot is
-			// broadcast — the sidebar target flashes "broken" until the user
-			// refreshes. Force a routing refresh to pull the new state in.
 			api.refreshRouting().catch(() => {});
+
+			editOpen = false;
+			editInitialPreset = null;
 		} catch (e: unknown) {
 			const msg = e instanceof Error ? e.message : String(e);
 			notifications.error(msg);
@@ -386,7 +410,8 @@
 					target={selection.name}
 					targetKind={selectedTargetEntry.kind}
 					rules={rulesOfSelected}
-					onaddrule={openNewRuleForSelectedTarget}
+					oncatalog={openCatalogForTarget}
+					onmanual={() => openNewRuleForSelectedTarget(null)}
 					oneditrule={openEditRule}
 					ondeleterule={handleDelete}
 					oniconrule={openIconPicker}
@@ -431,10 +456,13 @@
 							target={t.name}
 							targetKind={t.kind}
 							rules={hrRules.filter((r) => targetOf(r)?.name === t.name)}
-							onaddrule={() => {
-								editInitialTarget = { kind: t.kind, name: t.name };
-								editingRule = null;
-								editOpen = true;
+							oncatalog={() => {
+								selection = { type: 'target', name: t.name };
+								openCatalogForTarget();
+							}}
+							onmanual={() => {
+								selection = { type: 'target', name: t.name };
+								openNewRuleForSelectedTarget(null);
 							}}
 							oneditrule={openEditRule}
 							ondeleterule={handleDelete}
@@ -463,8 +491,33 @@
 	{maxelem}
 	{saving}
 	initialTarget={editInitialTarget}
+	initialPreset={editInitialPreset}
+	onpickcatalog={() => {
+		if (editOpen) openCatalogFromEdit();
+		else openCatalogForTarget();
+	}}
 	onsave={handleSave}
-	onclose={() => (editOpen = false)}
+	onclose={() => {
+		editOpen = false;
+		editInitialPreset = null;
+	}}
+/>
+
+<ServiceCatalogModal
+	bind:open={catalogOpen}
+	title="Каталог сервисов"
+	presetFilter={hrNeoCatalogPresetFilter}
+	footer="none"
+	multiple={false}
+	confirmLabel="Выбрать"
+	onclose={() => (catalogOpen = false)}
+	onconfirm={(presets) => {
+		if (editOpen) {
+			handleCatalogPickFromEdit(presets);
+		} else {
+			handleCatalogConfirm(presets);
+		}
+	}}
 />
 
 {#if pendingDelete}

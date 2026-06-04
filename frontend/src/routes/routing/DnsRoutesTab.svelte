@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { onMount, onDestroy } from 'svelte';
     import { api } from '$lib/api/client';
     import type { DnsRoute, RoutingTunnel, CatalogPreset } from '$lib/types';
     import { ConfirmModal, StoreStatusBadge, Button, Dropdown, type DropdownOption } from '$lib/components/ui';
@@ -23,7 +22,7 @@
     } from '$lib/stores/downloadRoute';
     import { areDownloadRouteDetailsVisible } from '$lib/types/usageLevel';
     import RoutingTabBodySkeleton from './RoutingTabBodySkeleton.svelte';
-    import CreateIcon from '$lib/components/ui/icons/CreateIcon.svelte';
+    import RoutingRuleAddMenu from '$lib/components/routing/RoutingRuleAddMenu.svelte';
     import { ERROR_WORDS, pluralForm, pluralize, RULE_WORDS } from '$lib/utils/pluralize';
 
     interface Props {
@@ -77,13 +76,8 @@
     let dnsToggling = $state<string | null>(null);
     let dnsSaving = $state(false);
     let dnsModalOpen = $state(false);
-    let addMenuOpen = $state(false);
     let iconPickerOpen = $state(false);
     let pickingForRoute = $state<DnsRoute | null>(null);
-
-    function handleClickOutside() { addMenuOpen = false; }
-    onMount(() => document.addEventListener('click', handleClickOutside));
-    onDestroy(() => document.removeEventListener('click', handleClickOutside));
 
     // Orphan = list whose tunnel binding was wiped on tunnel delete.
     // Domain list / subscriptions survive in storage; the user reassigns
@@ -330,10 +324,6 @@
     }
 </script>
 
-{#snippet createIcon()}
-    <CreateIcon />
-{/snippet}
-
 {#if !hasDnsEngine}
     <div class="empty-state">
         <p>Для DNS-маршрутизации требуется прошивка OS5 или <a href="https://github.com/Ground-Zerro/HydraRoute" target="_blank" rel="noopener">HydraRoute Neo</a></p>
@@ -354,37 +344,16 @@
             {#if dnsRoutes.length > 0}
                 <Button variant="ghost" size="sm" onclick={() => { dnsSelectionMode = true; dnsSelected = new Set(); }} disabled={bodyLoading}>Выбрать</Button>
             {/if}
-            <div class="dropdown-wrapper">
-                <Button
-                    variant="primary"
-                    size="sm"
-                    disabled={bodyLoading}
-                    onclick={(e) => { e.stopPropagation(); addMenuOpen = !addMenuOpen; }}
-                    iconBefore={createIcon}
-                >
-                    Добавить
-                    {#snippet iconAfter()}
-                        <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M2 4l3 3 3-3"/></svg>
-                    {/snippet}
-                </Button>
-                {#if addMenuOpen}
-                    <div class="dropdown-menu">
-                        <button class="dropdown-item" onclick={() => { addMenuOpen = false; dnsPresetOpen = true; }}>
-                            <svg class="dropdown-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                            Из каталога
-                        </button>
-                        <button class="dropdown-item" onclick={() => { addMenuOpen = false; editingDnsRoute = null; dnsModalOpen = true; }}>
-                            <svg class="dropdown-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                            Создать вручную
-                        </button>
-                        <div class="dropdown-sep"></div>
-                        <button class="dropdown-item" onclick={() => { addMenuOpen = false; dnsImportOpen = true; }}>
-                            <svg class="dropdown-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                            Загрузить конфигурацию
-                        </button>
-                    </div>
-                {/if}
-            </div>
+            <RoutingRuleAddMenu
+                disabled={bodyLoading}
+                oncatalog={() => (dnsPresetOpen = true)}
+                onmanual={() => {
+                    editingDnsRoute = null;
+                    dnsModalOpen = true;
+                }}
+                importEnabled
+                onimport={() => (dnsImportOpen = true)}
+            />
         </div>
     {:else}
         <div class="bulk-bar">
@@ -643,64 +612,6 @@
         flex-wrap: wrap;
     }
 
-    /* Dropdown menu */
-    .dropdown-wrapper {
-        position: relative;
-        display: inline-block;
-    }
-
-    .dropdown-menu {
-        position: absolute;
-        top: calc(100% + 4px);
-        right: 0;
-        z-index: 10;
-        background: var(--bg-secondary, var(--bg-card, #1a1b2e));
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-        min-width: 210px;
-        padding: 4px;
-    }
-
-    .dropdown-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 0.5rem 0.75rem;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 0.8125rem;
-        color: var(--text-secondary);
-        border: none;
-        background: none;
-        width: 100%;
-        text-align: left;
-        font-family: inherit;
-        transition: background 0.1s;
-    }
-
-    .dropdown-item:hover {
-        background: var(--bg-hover);
-        color: var(--text-primary);
-    }
-
-    :global(.dropdown-icon) {
-        width: 16px;
-        height: 16px;
-        flex-shrink: 0;
-        color: var(--text-muted);
-    }
-
-    .dropdown-item:hover :global(.dropdown-icon) {
-        color: var(--accent);
-    }
-
-    .dropdown-sep {
-        height: 1px;
-        background: var(--border);
-        margin: 4px 8px;
-    }
-
     @media (max-width: 640px) {
         .empty-actions {
             flex-direction: column;
@@ -717,7 +628,7 @@
             grid-column: 1 / -1;
         }
 
-        .section-buttons > .dropdown-wrapper {
+        .section-buttons > :global(.dropdown-wrapper) {
             width: 100%;
         }
 
@@ -725,11 +636,6 @@
             width: 100%;
             min-height: 28px;
             justify-content: center;
-        }
-
-        .dropdown-wrapper {
-            position: relative;
-            overflow: visible;
         }
     }
 </style>
