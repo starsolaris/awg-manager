@@ -1,9 +1,13 @@
 <script lang="ts">
+	import { Globe } from 'lucide-svelte';
+	import NdmsIconTile from '$lib/components/ui/NdmsIconTile.svelte';
 	import { getServiceIcon, hasServiceIconKeywordMatch } from '$lib/utils/service-icons';
 	import { resolveIconSlug, isPresetIconResolvable } from '$lib/utils/resolve-icon-slug';
 	import { resolveIconTileBackground } from '$lib/utils/icon-tile-background';
 	import { iconImageSrc } from '$lib/utils/icon-url-meta';
+	import { resolveNeutralServiceIconStyle } from '$lib/utils/ndms-card-icon-style';
 	import PresetIcon from '$lib/components/routing/singboxRouter/PresetIcon.svelte';
+	import { settingsSectionIconMode } from '$lib/stores/settingsSectionIconMode';
 	import { serviceLetterIcons } from '$lib/stores/serviceLetterIcons';
 	import { presetCatalog } from '$lib/stores/presets';
 	import IconTile from './IconTile.svelte';
@@ -44,6 +48,7 @@
 	);
 
 	let inlineIcon = $derived(getServiceIcon(name));
+	let neutralGlobeStyle = $derived(resolveNeutralServiceIconStyle($settingsSectionIconMode));
 	let innerSize = $derived.by(() => {
 		if (inlineIcon.assetSrc && inlineIcon.assetFit === 'cover') return size;
 		return Math.round(size * (inlineIcon.scale ?? 0.56));
@@ -62,6 +67,14 @@
 	<PresetIcon {slug} {size} label={name} />
 {:else if useLetter}
 	<LetterIconTile label={name} {size} />
+{:else if !hasKeywordIcon}
+	<NdmsIconTile
+		background={neutralGlobeStyle.background}
+		foreground={neutralGlobeStyle.foreground}
+		{size}
+	>
+		<Globe size={innerSize} color="currentColor" strokeWidth={1.75} />
+	</NdmsIconTile>
 {:else}
 	<div
 		class="service-icon"

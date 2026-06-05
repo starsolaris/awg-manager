@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { Modal } from '$lib/components/ui';
+	import SettingsSectionLabel from './SettingsSectionLabel.svelte';
 	import type { UsageLevel } from '$lib/types/usageLevel';
 	import { USAGE_LEVEL_LABELS } from '$lib/types/usageLevel';
+	import { SlidersHorizontal } from 'lucide-svelte';
 
 	interface Props {
 		value: UsageLevel;
@@ -84,8 +86,8 @@
 </script>
 
 <div class="settings-block">
-	<div class="section-label">Общие</div>
 	<div class="card" class:highlighted>
+	<SettingsSectionLabel label="Общие" icon={SlidersHorizontal} tone="slate" header />
 	<div class="setting-row level-header-row">
 		<div class="flex flex-col gap-1">
 			<span class="font-medium">Уровень использования</span>

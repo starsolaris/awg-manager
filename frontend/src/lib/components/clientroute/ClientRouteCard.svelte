@@ -3,11 +3,13 @@
 	import { Toggle } from '$lib/components/ui';
 	import RoutingTargetBadges from '$lib/components/routing/RoutingTargetBadges.svelte';
 	import NdmsIconTile from '$lib/components/ui/NdmsIconTile.svelte';
-	import { DEFAULT_ICON_TILE_BG } from '$lib/utils/icon-tile-background';
+	import { settingsSectionIconMode } from '$lib/stores/settingsSectionIconMode';
+	import { resolveNdmsCardIconStyle } from '$lib/utils/ndms-card-icon-style';
 	import {
 		ndmsIconTileInnerSize,
 		NDMS_ICON_TILE_SIZE,
 	} from '$lib/utils/ndms-icon-tile';
+	import { CLIENT_ROUTE_ICON_COLOR } from '$lib/utils/policy-icon';
 
 	interface Props {
 		route: ClientRoute;
@@ -35,6 +37,9 @@
 
 	let clientLabel = $derived(route.clientHostname || route.clientIp);
 	let iconSize = $derived(ndmsIconTileInnerSize(NDMS_ICON_TILE_SIZE));
+	const tileStyle = $derived(
+		resolveNdmsCardIconStyle($settingsSectionIconMode, CLIENT_ROUTE_ICON_COLOR),
+	);
 </script>
 
 <div
@@ -51,26 +56,28 @@
 				onchange={() => onselect?.()}
 			/>
 		{/if}
-		<NdmsIconTile background={DEFAULT_ICON_TILE_BG} size={NDMS_ICON_TILE_SIZE}>
-			<svg
-				class="device-icon"
-				width={iconSize}
-				height={iconSize}
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="1.75"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				aria-hidden="true"
-			>
-				<rect x="5" y="7" width="14" height="12" rx="2" />
-				<line x1="12" y1="7" x2="12" y2="3" />
-				<circle cx="12" cy="2" r="1" fill="currentColor" stroke="none" />
-				<circle cx="9" cy="13" r="1" fill="currentColor" stroke="none" />
-				<circle cx="15" cy="13" r="1" fill="currentColor" stroke="none" />
-			</svg>
-		</NdmsIconTile>
+		{#key $settingsSectionIconMode}
+			<NdmsIconTile background={tileStyle.background} foreground={tileStyle.foreground} size={NDMS_ICON_TILE_SIZE}>
+				<svg
+					class="device-icon"
+					width={iconSize}
+					height={iconSize}
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.75"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true"
+				>
+					<rect x="5" y="7" width="14" height="12" rx="2" />
+					<line x1="12" y1="7" x2="12" y2="3" />
+					<circle cx="12" cy="2" r="1" fill="currentColor" stroke="none" />
+					<circle cx="9" cy="13" r="1" fill="currentColor" stroke="none" />
+					<circle cx="15" cy="13" r="1" fill="currentColor" stroke="none" />
+				</svg>
+			</NdmsIconTile>
+		{/key}
 		<div class="card-info">
 			<div class="card-title">
 				<span

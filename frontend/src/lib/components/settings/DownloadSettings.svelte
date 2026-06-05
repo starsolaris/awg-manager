@@ -92,7 +92,7 @@
 	}
 </script>
 
-<div id="downloads" class="setting-row download-row">
+<div id="downloads" class="setting-row download-setting">
 	<div class="flex flex-col gap-1">
 		<span class="font-medium">Служебные загрузки AWGM</span>
 		<span class="setting-description">
@@ -113,14 +113,16 @@
 					fullWidth
 				/>
 			</div>
-			<Button
-				variant="secondary"
-				size="md"
-				onclick={onRefresh}
-				disabled={saving || loading}
-			>
-				Обновить список
-			</Button>
+			<div class="download-action">
+				<Button
+					variant="secondary"
+					size="md"
+					onclick={onRefresh}
+					disabled={saving || loading}
+				>
+					Обновить список
+				</Button>
+			</div>
 		</div>
 	{:else}
 		<div class="no-singbox-hint">
@@ -136,32 +138,52 @@
 	#downloads {
 		scroll-margin-top: 5.5rem;
 	}
-	.download-row {
+
+	.download-setting {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr);
-		justify-content: stretch;
-		align-items: stretch;
-		gap: 0.75rem;
+		grid-template-columns: minmax(0, 1fr) minmax(0, min(50%, 34rem));
+		gap: 1rem;
+		align-items: center;
 	}
-	.download-row > :first-child {
-		flex: initial;
+
+	.download-setting > :first-child {
+		min-width: 0;
 	}
+
 	.download-controls {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
-		align-items: center;
+		align-items: stretch;
 		gap: 0.5rem;
 		width: 100%;
+		min-width: 0;
 	}
+
 	.route-select {
 		width: 100%;
 		min-width: 0;
 		max-width: 100%;
 	}
+
+	.download-action {
+		display: flex;
+		align-items: stretch;
+		white-space: nowrap;
+	}
+
+	.download-action :global(.btn) {
+		height: 32px;
+		min-height: 32px;
+		max-height: 32px;
+		box-sizing: border-box;
+		padding-block: 0;
+	}
+
 	.download-error {
 		color: var(--color-danger);
 		font-size: 0.75rem;
 	}
+
 	.no-singbox-hint {
 		display: flex;
 		flex-direction: column;
@@ -171,24 +193,53 @@
 		border-radius: var(--radius-sm);
 		background: color-mix(in srgb, var(--color-settings-control-bg) 60%, transparent);
 		font-size: 0.8125rem;
+		width: 100%;
+		min-width: 0;
 	}
+
 	.no-singbox-title {
 		color: var(--text-primary, var(--color-text-primary));
 		font-weight: 500;
 	}
+
 	.no-singbox-detail {
 		color: var(--text-muted, var(--color-text-muted));
 		font-size: 0.75rem;
 	}
-	@media (max-width: 900px) {
+
+	@media (min-width: 641px) {
+		.download-setting > :first-child {
+			display: flex;
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0.25rem;
+		}
+
+		.download-setting .setting-description {
+			white-space: normal;
+			overflow: visible;
+			text-overflow: clip;
+		}
+
 		.download-controls {
-			grid-template-columns: 1fr;
+			width: 100%;
+			grid-template-columns: minmax(0, 1fr) auto;
 			align-items: stretch;
 		}
-		.route-select {
-			width: 100%;
-			min-width: 0;
-			max-width: none;
+
+		.download-action :global(.btn) {
+			width: auto;
+			min-width: 7.5rem;
+		}
+	}
+
+	@media (max-width: 640px) {
+		.download-setting {
+			grid-template-columns: 1fr;
+		}
+
+		.download-controls {
+			grid-template-columns: minmax(0, 1fr) auto;
 		}
 	}
 </style>

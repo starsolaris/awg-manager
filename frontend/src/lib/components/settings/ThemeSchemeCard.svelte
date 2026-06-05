@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { Button, SegmentedControl, Toggle } from '$lib/components/ui';
+	import SettingsSectionLabel from './SettingsSectionLabel.svelte';
 	import { compactLayout } from '$lib/stores/compactLayout';
+	import {
+		settingsSectionIconMode,
+		SETTINGS_SECTION_ICON_MODE_LABELS,
+		type SettingsSectionIconMode,
+	} from '$lib/stores/settingsSectionIconMode';
 	import { serviceLetterIcons } from '$lib/stores/serviceLetterIcons';
 	import { usageLevel } from '$lib/stores/settings';
 	import {
@@ -11,6 +17,7 @@
 		type ThemeModePreference,
 		type ThemePreset,
 	} from '$lib/stores/theme';
+	import { Palette } from 'lucide-svelte';
 
 	const PRESET_ORDER: ThemePreset[] = ['legacy', 'neo', 'mint', 'custom'];
 	const LEGACY_MODE_OPTIONS: Array<{ value: ThemeModePreference; label: string }> = [
@@ -22,6 +29,12 @@
 		{ key: 'accent', label: 'Акцент', hint: 'Кнопки, активные состояния и ссылки' },
 		{ key: 'background', label: 'Фон', hint: 'Базовый цвет приложения' },
 		{ key: 'text', label: 'Текст', hint: 'Основной цвет текста и контраста' },
+	];
+
+	const ICON_MODE_OPTIONS: Array<{ value: SettingsSectionIconMode; label: string }> = [
+		{ value: 'strict', label: SETTINGS_SECTION_ICON_MODE_LABELS.strict },
+		{ value: 'harmonious', label: SETTINGS_SECTION_ICON_MODE_LABELS.harmonious },
+		{ value: 'vivid', label: SETTINGS_SECTION_ICON_MODE_LABELS.vivid },
 	];
 
 	let expanded = $state(false);
@@ -52,8 +65,8 @@
 </script>
 
 <div class="settings-block">
-	<div class="section-label">Внешний вид</div>
 	<div class="card">
+	<SettingsSectionLabel label="Внешний вид" icon={Palette} tone="pink" header />
 	<div class="setting-row">
 		<button
 			type="button"
@@ -194,6 +207,20 @@
 		</div>
 	{/if}
 
+	<div class="setting-row icon-mode-row">
+		<div class="flex flex-col gap-1">
+			<span class="font-medium">Окраска иконок</span>
+			<span class="setting-description">
+				Заголовки настроек, политики доступа, VPN для устройств и глобус-заглушка в списках маршрутизации.
+			</span>
+		</div>
+		<SegmentedControl
+			value={$settingsSectionIconMode}
+			options={ICON_MODE_OPTIONS}
+			ariaLabel="Окраска иконок"
+			onchange={(mode) => settingsSectionIconMode.setMode(mode)}
+		/>
+	</div>
 	<div class="setting-row compact-layout-row">
 		<div class="flex flex-col gap-1">
 			<span class="font-medium">Компактный режим</span>

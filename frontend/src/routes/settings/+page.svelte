@@ -20,6 +20,7 @@
 		SettingsFooter,
 		UsageLevelCard,
 		DevelopChannelGateModal,
+		SettingsSectionLabel,
 	} from "$lib/components/settings";
 	import { setSettings as setGlobalSettings } from "$lib/stores/settings";
 	import {
@@ -48,6 +49,15 @@
 	import { hasDevelopChannelQuizPassed } from "$lib/utils/developChannelGate";
 	import { developFeedbackFabVisible } from "$lib/stores/developFeedbackFab";
 	import { pluralize, AVAILABLE_WORDS, TUNNEL_WORDS } from "$lib/utils/pluralize";
+	import {
+		CircleArrowDown,
+		Lock,
+		CloudDownload,
+		ScrollText,
+		Activity,
+		Wrench,
+		Power,
+	} from "lucide-svelte";
 
 	const expandUsageLevel = $derived($page.url.searchParams.has('mode'));
 	const highlightFeedbackFab = $derived($page.url.searchParams.has('feedbackFab'));
@@ -685,10 +695,8 @@ $effect(() => {
 				/>
 
 				<div class="settings-block">
-					<div class="section-label">
-						<span>Обновление AWGM</span>
-					</div>
 					<div class="card">
+						<SettingsSectionLabel label="Обновление AWGM" icon={CircleArrowDown} tone="green" header />
 						<UpdateSection bind:updateInfo />
 					</div>
 				</div>
@@ -724,8 +732,8 @@ $effect(() => {
 			{/if}
 
 				<div class="settings-block">
-					<div class="section-label">Доступ</div>
 					<div class="card">
+					<SettingsSectionLabel label="Доступ" icon={Lock} tone="blue" header />
 					<div class="setting-row toggle-inline-row">
 						<div class="flex flex-col gap-1">
 							<span class="font-medium">Авторизация</span>
@@ -739,8 +747,8 @@ $effect(() => {
 				</div>
 
 				<div class="settings-block">
-					<div class="section-label">Загрузки и обновления</div>
 					<div class="card">
+					<SettingsSectionLabel label="Загрузки и обновления" icon={CloudDownload} tone="orange" header />
 					<div class="setting-row toggle-inline-row">
 						<div class="flex flex-col gap-1">
 							<span class="font-medium">Автопроверка обновлений</span>
@@ -798,8 +806,8 @@ $effect(() => {
 				</div>
 
 				<div class="settings-block">
-					<div class="section-label">Логирование</div>
 					<div class="card">
+					<SettingsSectionLabel label="Логирование" icon={ScrollText} tone="slate" header />
 					<LoggingSettings
 						bind:settings
 						{saving}
@@ -811,8 +819,8 @@ $effect(() => {
 
 				{#if $usageLevel === "expert"}
 				<div class="settings-block">
-					<div class="section-label">Проверка пинга</div>
 					<div class="card">
+					<SettingsSectionLabel label="Проверка пинга" icon={Activity} tone="teal" header />
 					<div class="setting-row ping-target-setting">
 						<div class="flex flex-col gap-1">
 							<span class="font-medium">Цели проверки</span>
@@ -852,12 +860,12 @@ $effect(() => {
 				</div>
 
 				<div class="settings-block">
-					<div class="section-label">Расширенные</div>
 					<div
 						id="feedback-fab"
 						class="card settings-highlight-target"
 						class:highlighted={highlightFeedbackFab}
 					>
+					<SettingsSectionLabel label="Расширенные" icon={Wrench} tone="indigo" header />
 					<div class="setting-row api-key-setting">
 						<div class="flex flex-col gap-1">
 							<span class="font-medium">API Key</span>
@@ -929,8 +937,8 @@ $effect(() => {
 		</div>
 
 		<div class="settings-block">
-			<div class="section-label">Действия</div>
 			<div class="card actions-card">
+			<SettingsSectionLabel label="Действия" icon={Power} tone="red" header />
 			<div class="setting-row">
 				<div class="flex flex-col gap-1">
 					<span class="font-medium">Перезапуск AWGM</span>

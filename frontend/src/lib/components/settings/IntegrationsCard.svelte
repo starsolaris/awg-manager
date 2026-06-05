@@ -1,10 +1,12 @@
 <script lang="ts">
 	import type { SingboxStatus, HydraRouteStatus } from '$lib/types';
 	import { Button, Modal, StatusDot } from '$lib/components/ui';
+	import SettingsSectionLabel from './SettingsSectionLabel.svelte';
 	import { copyToClipboard } from '$lib/utils/clipboard';
 	import { singboxInstallProgress } from '$lib/stores/singboxInstall';
 	import { formatBytes } from '$lib/utils/format';
 	import { stripAnsi } from '$lib/utils/ansi';
+	import { Blocks } from 'lucide-svelte';
 
 	interface Props {
 		singboxStatus: SingboxStatus | null;
@@ -116,8 +118,8 @@
 
 {#if showSingbox || showHydra}
 	<div class="settings-block">
-		<div class="section-label">Интеграции</div>
 		<div class="card">
+		<SettingsSectionLabel label="Интеграции" icon={Blocks} tone="purple" header />
 		{#if showSingbox}
 			<div class="setting-row">
 				<div class="integration-item">

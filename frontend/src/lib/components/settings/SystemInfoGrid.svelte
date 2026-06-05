@@ -3,6 +3,8 @@
 	import { onDestroy } from 'svelte';
 	import type { SystemInfo } from '$lib/types';
 	import type { UsageLevel } from '$lib/types/usageLevel';
+	import SettingsSectionLabel from './SettingsSectionLabel.svelte';
+	import { Router } from 'lucide-svelte';
 
 	interface Props {
 		systemInfo: SystemInfo;
@@ -119,57 +121,57 @@
 </script>
 
 <div class="settings-block sysinfo-block">
-	<div class="head-row">
-		<button
-			type="button"
-			class="section-collapse-btn"
-			onclick={() => (collapsed = !collapsed)}
-			aria-expanded={!collapsed}
-			aria-label={collapsed ? 'Развернуть информацию о системе' : 'Свернуть информацию о системе'}
-		>
-			<span class="section-label">Система</span>
-			<svg
-				class="section-chevron system-collapse-marker"
-				class:open={!collapsed}
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				aria-hidden="true"
+	<div class="card sysinfo-card">
+		<div class="head-row settings-card-head">
+			<button
+				type="button"
+				class="section-collapse-btn"
+				onclick={() => (collapsed = !collapsed)}
+				aria-expanded={!collapsed}
+				aria-label={collapsed ? 'Развернуть информацию о системе' : 'Свернуть информацию о системе'}
 			>
-				<polyline points="6 9 12 15 18 9" />
-			</svg>
-		</button>
-		{#if !isBasic}
-			<div class="head-actions">
-				{#if updatedLabel}
-					<span class="updated-at" title="Последнее обновление">
-						<span class="live-dot" class:live-dot-loading={refreshing}></span>
-						{updatedLabel}
-					</span>
-				{/if}
-				<!-- TODO: вернуть кнопку обновления
-				<button
-					type="button"
-					class="refresh-btn"
-					class:timer-enabled={isExpert && autoRefreshMs > 0}
-					onclick={() => onrefresh?.()}
-					disabled={refreshing}
-					aria-label="Обновить информацию о роутере"
-					title="Обновить"
-					style={`--refresh-progress:${refreshProgress * 360}deg;`}
+				<SettingsSectionLabel label="Система" icon={Router} tone="blue" inline />
+				<svg
+					class="section-chevron system-collapse-marker"
+					class:open={!collapsed}
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					aria-hidden="true"
 				>
-					<svg class="refresh-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-						<path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-					</svg>
-				</button>
-				-->
-			</div>
-		{/if}
-	</div>
+					<polyline points="6 9 12 15 18 9" />
+				</svg>
+			</button>
+			{#if !isBasic}
+				<div class="head-actions">
+					{#if updatedLabel}
+						<span class="updated-at" title="Последнее обновление">
+							<span class="live-dot" class:live-dot-loading={refreshing}></span>
+							{updatedLabel}
+						</span>
+					{/if}
+					<!-- TODO: вернуть кнопку обновления
+					<button
+						type="button"
+						class="refresh-btn"
+						class:timer-enabled={isExpert && autoRefreshMs > 0}
+						onclick={() => onrefresh?.()}
+						disabled={refreshing}
+						aria-label="Обновить информацию о роутере"
+						title="Обновить"
+						style={`--refresh-progress:${refreshProgress * 360}deg;`}
+					>
+						<svg class="refresh-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+							<path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+						</svg>
+					</button>
+					-->
+				</div>
+			{/if}
+		</div>
 
-	<div class="card sysinfo-heading-card" class:card-collapsed={collapsed}>
-	<div class="collapsible-body" class:body-hidden={collapsed}>
+		<div class="collapsible-body" class:body-hidden={collapsed}>
 	<div class="setting-row">
 		<span class="info-key">AWGM</span>
 		<span class="info-val">{systemInfo.version}</span>
@@ -278,10 +280,15 @@
 </div>
 
 <style>
-	.sysinfo-block > .head-row {
+	.sysinfo-block > .card {
+		padding: 1rem;
+	}
+
+	.settings-card-head {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		gap: 0.75rem;
 		margin-bottom: 0.5rem;
 	}
 
@@ -353,10 +360,6 @@
 			max-height: 0;
 			opacity: 0;
 			pointer-events: none;
-		}
-
-		.sysinfo-heading-card.card-collapsed {
-			display: none;
 		}
 	}
 
