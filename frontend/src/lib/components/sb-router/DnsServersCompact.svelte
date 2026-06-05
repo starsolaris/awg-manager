@@ -9,6 +9,7 @@
   import { ArrowRight, Trash2, Edit3 } from 'lucide-svelte';
   import { resolveMemberLabel } from '$lib/utils/memberLabel';
   import { dnsRuleTarget } from './dnsRuleLabel';
+  import { dnsMatcherParts, dnsMatcherSummary } from './dnsMatcherParts';
 
   const AWG_OPTION_GROUPS = new Set(['AWG туннели', 'Системные WireGuard']);
 
@@ -50,15 +51,6 @@
       AWG_OPTION_GROUPS.has(g.group) && g.items.some((i) => i.value === detour)
     ) ? 'purple' : 'accent';
   }
-
-  function matcherSummary(r: SingboxRouterDNSRule): string {
-    const parts: string[] = [];
-    if (r.rule_set?.length) parts.push(`rule_set: ${r.rule_set.join(', ')}`);
-    if (r.domain_suffix?.length) parts.push(`suffix: ${r.domain_suffix[0]}${r.domain_suffix.length > 1 ? ` +${r.domain_suffix.length - 1}` : ''}`);
-    if (r.domain_keyword?.length) parts.push(`keyword: ${r.domain_keyword[0]}`);
-    if (r.query_type?.length) parts.push(`query_type=${r.query_type[0]}`);
-    return parts.length > 0 ? parts.join(' · ') : '—';
-  }
 </script>
 
 <div class="wrap">
@@ -91,14 +83,33 @@
       <div class="rules-rows">
         {#each rules as r, i (i)}
           {@const tgt = dnsRuleTarget(r)}
+          {@const matchers = dnsMatcherParts(r)}
           <div class="rule-row">
             <button
               type="button"
               class="rule-content"
               onclick={() => onEditRule(i)}
-              title={`${matcherSummary(r)} → ${tgt.label}`}
+              title={`${dnsMatcherSummary(r)} → ${tgt.label}`}
             >
-              <span class="rule-match">{matcherSummary(r)}</span>
+              <span class="rule-match">
+                {#if matchers.length === 0}
+                  —
+                {:else}
+                  {#each matchers as part, pi (part.key + pi)}
+                    <span class="m-part">
+                      <span class="m-head">
+                        {#if pi > 0}<span class="m-sep">· </span>{/if}
+                        {#if part.key === 'query_type'}
+                          <span class="m-key">query_type</span><span class="m-eq">=</span>
+                        {:else}
+                          <span class="m-key">{part.key}</span><span class="m-colon">: </span>
+                        {/if}
+                      </span>
+                      <span class="m-val">{part.value}</span>
+                    </span>
+                  {/each}
+                {/if}
+              </span>
               <span class="rule-arrow" aria-hidden="true">→</span>
               {#if tgt.kind === 'block'}
                 <span class="rule-target">
@@ -227,7 +238,6 @@
     display: grid;
     gap: 0.25rem;
     min-width: 0;
-    padding-top: 0.25rem;
   }
   .rule-row {
     transition: background-color 0.15s ease;
@@ -260,7 +270,24 @@
     color: var(--text);
     font-size: 12px;
     line-height: 1.35;
-    white-space: normal;
+  }
+  .m-part {
+    display: inline;
+  }
+  .m-head {
+    white-space: nowrap;
+  }
+  .m-key {
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  .m-colon,
+  .m-eq,
+  .m-sep {
+    color: var(--text-muted);
+  }
+  .m-val {
+    color: var(--text-secondary);
     overflow-wrap: anywhere;
   }
   .rule-arrow {
@@ -302,13 +329,24 @@
     font-size: 12px;
   }
 
-  @media (max-width: 720px) {
+  @media (max-width: 768px) {
+    .rules-rows {
+      gap: 0;
+    }
+
     .rule-row {
       grid-template-columns: minmax(0, 1fr) auto;
       align-items: start;
       gap: 0.5rem;
       padding: 0.65rem 0.75rem;
-      border: 1px solid var(--border);
+      border: 0;
+      border-radius: 0;
+      border-bottom: 1px solid var(--border);
+      background: transparent;
+    }
+
+    .rule-row:last-child {
+      border-bottom: 0;
     }
 
     .rule-content {

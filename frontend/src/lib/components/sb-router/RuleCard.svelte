@@ -238,9 +238,17 @@
   }
   .main {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 12px;
+    gap: 8px 12px;
     min-width: 0;
+    overflow: hidden;
+  }
+
+  .main :global(.service-tile) {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
   }
 
   .generic-tile {
@@ -285,6 +293,9 @@
     gap: 4px;
     flex-wrap: wrap;
     min-width: 0;
+    flex: 0 1 auto;
+    max-width: 100%;
+    overflow: hidden;
   }
   .more {
     display: inline-flex;
@@ -302,8 +313,23 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-shrink: 0;
+    min-width: 0;
+    max-width: 100%;
   }
-  .arrow { color: var(--text-muted); }
+  .arrow {
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .action :global(.tile) {
+    min-width: 0;
+    max-width: 11rem;
+  }
+  .action :global(.label-mono) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
 
   .right-slot {
     display: flex;

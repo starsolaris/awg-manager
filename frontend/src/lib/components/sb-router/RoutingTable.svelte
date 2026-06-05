@@ -211,7 +211,7 @@
   .header,
   .row {
     display: grid;
-    grid-template-columns: 24px 64px 92px minmax(0, 1fr) minmax(96px, 180px) 80px;
+    grid-template-columns: 24px 64px 92px minmax(0, 1fr) minmax(72px, 160px) 88px;
     align-items: center;
     gap: 8px;
     padding: 8px 14px;
@@ -296,10 +296,7 @@
   }
   .action-badge-cell {
     min-width: 0;
-    justify-self: stretch;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    justify-self: center;
   }
   .outbound-cell {
     min-width: 0;
@@ -321,18 +318,8 @@
   }
   .actions-col {
     text-align: right;
-    justify-self: stretch;
-    min-width: 0;
-  }
-  .header > .actions-col {
-    display: block;
-    width: 100%;
-    text-align: right;
-    justify-self: stretch;
-    padding-right: 0.25rem;
   }
   .actions {
-    width: 100%;
     display: flex;
     flex-wrap: nowrap;
     align-items: center;
@@ -345,30 +332,6 @@
     text-align: center;
     font-size: 12px;
   }
-  @media (min-width: 721px) {
-    .action-badge-cell,
-    .outbound-cell,
-    .row > .actions-col {
-      display: flex;
-      align-items: center;
-      flex-wrap: nowrap;
-      min-width: 0;
-    }
-
-    .action-badge-cell,
-    .outbound-cell {
-      justify-content: center;
-    }
-
-    .row > .actions-col {
-      justify-content: flex-end;
-    }
-
-    .header > .actions-col {
-      display: block;
-      text-align: right;
-    }
-  }
   @media (max-width: 768px) {
     .table {
       overflow-x: visible;
@@ -379,15 +342,11 @@
       display: none;
     }
     .row {
-      display: grid;
-      grid-template-columns: 1.5rem minmax(0, 1fr) 72px;
-      grid-template-areas:
-        "idx matcher actions"
-        "idx badges badges"
-        "idx reorder reorder";
-      align-items: start;
-      gap: 0.5rem 0.6rem;
-      padding: 0.75rem 0.875rem;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+      padding: 10px 14px 10px 42px;
       margin: 0;
       border: 0;
       border-radius: 0;
@@ -400,63 +359,63 @@
       border-bottom: 0;
     }
     .idx {
-      grid-area: idx;
-      position: static;
-      width: auto;
-      padding-top: 0.1rem;
+      position: absolute;
+      left: 14px;
+      top: 10px;
+      width: 28px;
       font-size: 11px;
-      line-height: 1.2;
       text-align: center;
     }
     .matchers {
-      grid-area: matcher;
+      order: 1;
       min-width: 0;
-      padding-right: 0;
-      display: block;
+      padding-right: 72px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
       white-space: normal;
-      overflow-wrap: anywhere;
-      word-break: normal;
+      overflow-wrap: break-word;
+      word-break: break-word;
       line-height: 1.35;
       text-align: left;
     }
     .matcher-text {
       display: inline;
-      font-size: 12px;
+      font-size: 11px;
       color: var(--text-secondary);
     }
     .actions-col {
-      grid-area: actions;
-      position: static;
-      justify-self: end;
-      align-self: start;
+      position: absolute;
+      top: 10px;
+      right: 14px;
       text-align: right;
-      min-width: 0;
     }
     .actions {
-      width: auto;
       display: flex;
       flex-wrap: nowrap;
       justify-content: flex-end;
       gap: 4px;
     }
-    .action-badge-cell,
-    .outbound-cell {
-      grid-area: badges;
-      display: inline-flex;
+    .action-badge-cell {
+      order: 2;
+      display: flex;
+      flex-wrap: wrap;
       align-items: center;
-      gap: 0.35rem;
+      gap: 6px;
+      min-width: 0;
+      justify-content: flex-start;
+      text-align: left;
+    }
+    .outbound-cell {
+      order: 3;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
       min-width: 0;
       max-width: 100%;
-      text-align: left;
-      overflow: visible;
-    }
-    .action-badge-cell {
-      justify-self: start;
       justify-content: flex-start;
-    }
-    .outbound-cell {
-      justify-self: end;
-      justify-content: flex-end;
+      text-align: left;
     }
     .outbound-cell :global(.badge) {
       max-width: 100%;
@@ -466,18 +425,16 @@
       white-space: nowrap;
     }
     .reorder {
-      grid-area: reorder;
-      display: flex;
+      order: 4;
       justify-content: flex-start;
-      gap: 0.35rem;
-      padding-top: 0.35rem;
+      gap: 4px;
+      padding-top: 8px;
       border-top: 1px dashed color-mix(in srgb, var(--border) 85%, transparent);
-      min-width: 0;
     }
     .reorder::before {
       content: 'Порядок';
       align-self: center;
-      margin-right: 0.35rem;
+      margin-right: 6px;
       font-size: 10px;
       font-weight: 600;
       line-height: 1.2;
@@ -489,7 +446,12 @@
       display: none;
     }
     .mobile-label {
-      display: none;
+      flex-shrink: 0;
+      font-size: 10px;
+      line-height: 1.2;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
     .route-reorder-btn {
       width: 32px;
