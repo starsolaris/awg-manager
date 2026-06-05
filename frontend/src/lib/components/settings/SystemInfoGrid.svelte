@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import { onDestroy } from 'svelte';
 	import type { SystemInfo } from '$lib/types';
 	import type { UsageLevel } from '$lib/types/usageLevel';
 	import SettingsSectionLabel from './SettingsSectionLabel.svelte';
@@ -17,8 +16,6 @@
 
 	let { systemInfo, usageLevel, onrefresh, refreshing = false, lastUpdated = null, autoRefreshMs = 0 }: Props = $props();
 	let detailsOpen = $state(false);
-	let nowTs = $state(Date.now());
-	let progressTimer: ReturnType<typeof setInterval> | null = null;
 	const DETAILS_KEY = 'awgm.settings.system.detailsOpen';
 	const COLLAPSED_KEY = 'awgm.settings.system.collapsed';
 	const details = $derived(systemInfo.routerDetails);
@@ -97,27 +94,20 @@
 
 	const isBasic = $derived(usageLevel === 'basic');
 	const isExpert = $derived(usageLevel === 'expert');
-	const refreshProgress = $derived.by(() => {
-		if (!autoRefreshMs || autoRefreshMs <= 0 || !lastUpdated) return 0;
-		const updatedAt = new Date(lastUpdated).getTime();
-		if (!Number.isFinite(updatedAt)) return 0;
-		const elapsed = Math.max(0, nowTs - updatedAt);
-		const ratio = Math.min(1, elapsed / autoRefreshMs);
-		return ratio;
-	});
-
-	if (browser) {
-		progressTimer = setInterval(() => {
-			nowTs = Date.now();
-		}, 200);
-	}
-
-	onDestroy(() => {
-		if (progressTimer) {
-			clearInterval(progressTimer);
-			progressTimer = null;
-		}
-	});
+	// Деривы для кнопки обновления параметров роутера временно отключены вместе с самой кнопкой.
+	// const showRefreshRing = $derived(isExpert && autoRefreshMs > 0);
+	// const refreshRingStyle = $derived.by(() => {
+	// 	if (!showRefreshRing) return undefined;
+	// 	let delay = '0ms';
+	// 	if (lastUpdated) {
+	// 		const updatedAt = new Date(lastUpdated).getTime();
+	// 		if (Number.isFinite(updatedAt)) {
+	// 			const elapsed = Math.max(0, Date.now() - updatedAt) % autoRefreshMs;
+	// 			delay = `-${elapsed}ms`;
+	// 		}
+	// 	}
+	// 	return `--refresh-duration: ${autoRefreshMs}ms; --refresh-delay: ${delay};`;
+	// });
 </script>
 
 <div class="settings-block sysinfo-block">
@@ -151,21 +141,23 @@
 							{updatedLabel}
 						</span>
 					{/if}
-					<!-- TODO: вернуть кнопку обновления
-					<button
-						type="button"
-						class="refresh-btn"
-						class:timer-enabled={isExpert && autoRefreshMs > 0}
-						onclick={() => onrefresh?.()}
-						disabled={refreshing}
-						aria-label="Обновить информацию о роутере"
-						title="Обновить"
-						style={`--refresh-progress:${refreshProgress * 360}deg;`}
-					>
-						<svg class="refresh-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-							<path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-						</svg>
-					</button>
+					<!-- Кнопка обновления параметров роутера временно скрыта.
+					{#key lastUpdated}
+						<button
+							type="button"
+							class="refresh-btn"
+							class:timer-enabled={showRefreshRing}
+							onclick={() => onrefresh?.()}
+							disabled={refreshing}
+							aria-label="Обновить информацию о роутере"
+							title="Обновить"
+							style={refreshRingStyle}
+						>
+							<svg class="refresh-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+								<path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+							</svg>
+						</button>
+					{/key}
 					-->
 				</div>
 			{/if}
@@ -406,6 +398,7 @@
 		animation: pulse 1s ease-in-out infinite;
 	}
 
+	/* Стили кнопки обновления параметров роутера временно отключены вместе с самой кнопкой.
 	.refresh-btn {
 		position: relative;
 		display: inline-flex;
@@ -427,13 +420,28 @@
 		inset: -1px;
 		border-radius: inherit;
 		padding: 1px;
+		--refresh-progress: 0deg;
 		background: conic-gradient(var(--color-accent) var(--refresh-progress), transparent 0deg);
+		animation: refresh-ring-progress var(--refresh-duration, 30s) linear infinite;
+		animation-delay: var(--refresh-delay, 0ms);
 		-webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
 		mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
 		-webkit-mask-composite: xor;
 		mask-composite: exclude;
 		pointer-events: none;
 		opacity: 0.95;
+	}
+
+	@property --refresh-progress {
+		syntax: '<angle>';
+		inherits: false;
+		initial-value: 0deg;
+	}
+
+	@keyframes refresh-ring-progress {
+		to {
+			--refresh-progress: 360deg;
+		}
 	}
 
 	.refresh-btn:hover:not(:disabled) {
@@ -452,6 +460,7 @@
 		width: 15px;
 		height: 15px;
 	}
+	*/
 
 	@keyframes pulse {
 		0%, 100% { opacity: 1; }
