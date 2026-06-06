@@ -814,6 +814,7 @@ label {
 .settings-layout .api-key-controls input {
 	font-family: var(--font-mono, ui-monospace, monospace);
 	font-size: 0.8rem;
+	font-weight: 400;
 }
 
 .settings-layout .api-key-controls input:read-only {
