@@ -276,3 +276,33 @@ export function getPolicyIconComponent(id: PolicyIconId): PolicyIconComponent | 
 	if (getPolicyInlineSvg(id)) return undefined;
 	return POLICY_ICON_COMPONENTS[id as keyof typeof POLICY_ICON_COMPONENTS];
 }
+
+/** Accent colors for access-policy tiles in vivid icon mode. */
+export const POLICY_ICON_COLORS: Record<PolicyIconId, string> = {
+	shuffle: '#78909c',
+	home: '#0077ff',
+	shield: '#00a650',
+	route: '#8b5cf6',
+	tools: '#ff8a00',
+	guest: '#00acc1',
+	kids: '#ff4d7e',
+	work: '#5c6bc0',
+	gaming: '#8b5cf6',
+	tv: '#ff4d7e',
+	iot: '#ff8a00',
+	hydraroute: '#ff8a00',
+	direct: '#78909c',
+	test: '#00acc1',
+	backup: '#00a650',
+	wifi: '#0077ff',
+	parents: '#ff5252',
+	server: '#5c6bc0',
+	north_korea: '#ff5252',
+};
+
+export function getPolicyIconColor(id: PolicyIconId): string {
+	return POLICY_ICON_COLORS[id];
+}
+
+/** Accent for VPN-for-devices tiles in vivid icon mode. */
+export const CLIENT_ROUTE_ICON_COLOR = '#0077ff';

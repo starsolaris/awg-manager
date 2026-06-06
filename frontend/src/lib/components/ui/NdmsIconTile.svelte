@@ -4,11 +4,12 @@
 
 	interface Props {
 		background: string;
+		foreground?: string;
 		size?: number;
 		children?: Snippet;
 	}
 
-	let { background, size = NDMS_ICON_TILE_SIZE, children }: Props = $props();
+	let { background, foreground, size = NDMS_ICON_TILE_SIZE, children }: Props = $props();
 </script>
 
 <div
@@ -16,6 +17,7 @@
 	style:width="{size}px"
 	style:height="{size}px"
 	style:background
+	style:color={foreground}
 	style:border-radius="{NDMS_ICON_TILE_RADIUS}px"
 	style:clip-path={NDMS_ICON_TILE_CLIP_PATH}
 >
@@ -29,6 +31,5 @@
 		justify-content: center;
 		flex-shrink: 0;
 		overflow: hidden;
-		color: var(--text-primary);
 	}
 </style>

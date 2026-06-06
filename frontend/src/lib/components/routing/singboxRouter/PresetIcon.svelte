@@ -14,8 +14,11 @@
 		ShieldOff,
 		GlobeLock,
 	} from 'lucide-svelte';
+	import NdmsIconTile from '$lib/components/ui/NdmsIconTile.svelte';
 	import { brandIcons } from '$lib/generated/brandIcons';
 	import { getPresetInlineIcon, type ServiceIconConfig } from '$lib/utils/service-icons';
+	import { resolveNeutralServiceIconStyle } from '$lib/utils/ndms-card-icon-style';
+	import { settingsSectionIconMode } from '$lib/stores/settingsSectionIconMode';
 	import LetterIconTile from '$lib/components/dnsroutes/LetterIconTile.svelte';
 
 	interface Props {
@@ -102,8 +105,24 @@
 		if (cfg.assetSrc && cfg.assetFit === 'cover') return size;
 		return Math.round(size * (cfg.scale ?? 0.56));
 	});
+
+	const neutralGlobeStyle = $derived(resolveNeutralServiceIconStyle($settingsSectionIconMode));
+	const isNeutralGlobeLucide = $derived(
+		resolved?.kind === 'lucide' &&
+			(slug === 'lucide-globe' || slug === 'lucide-globe-lock'),
+	);
 </script>
 
+{#if isNeutralGlobeLucide && resolved?.kind === 'lucide'}
+	{@const Component = resolved.component}
+	<NdmsIconTile
+		background={neutralGlobeStyle.background}
+		foreground={neutralGlobeStyle.foreground}
+		{size}
+	>
+		<Component size={Math.floor(size * 0.56)} color="currentColor" strokeWidth={1.75} />
+	</NdmsIconTile>
+{:else}
 <div class="icon-box" style="width:{size}px;height:{size}px">
 	{#if resolved === null}
 		<LetterIconTile label={label || slug || '?'} {size} />
@@ -125,7 +144,7 @@
 	{:else if resolved.kind === 'lucide'}
 		{@const Component = resolved.component}
 		<div class="brand" style="background:{resolved.bg}">
-			<Component size={Math.floor(size * 0.56)} color="white" />
+			<Component size={Math.floor(size * 0.56)} color="white" strokeWidth={1.75} />
 		</div>
 	{:else if resolved.kind === 'inline'}
 		<div class="brand" style="background:{resolved.config.background}">
@@ -151,6 +170,7 @@
 		</div>
 	{/if}
 </div>
+{/if}
 
 <style>
 	.icon-box {

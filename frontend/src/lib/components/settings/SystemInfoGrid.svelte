@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import { onDestroy } from 'svelte';
 	import type { SystemInfo } from '$lib/types';
 	import type { UsageLevel } from '$lib/types/usageLevel';
+	import SettingsSectionLabel from './SettingsSectionLabel.svelte';
+	import { Router } from 'lucide-svelte';
 
 	interface Props {
 		systemInfo: SystemInfo;
@@ -15,8 +16,6 @@
 
 	let { systemInfo, usageLevel, onrefresh, refreshing = false, lastUpdated = null, autoRefreshMs = 0 }: Props = $props();
 	let detailsOpen = $state(false);
-	let nowTs = $state(Date.now());
-	let progressTimer: ReturnType<typeof setInterval> | null = null;
 	const DETAILS_KEY = 'awgm.settings.system.detailsOpen';
 	const COLLAPSED_KEY = 'awgm.settings.system.collapsed';
 	const details = $derived(systemInfo.routerDetails);
@@ -95,78 +94,44 @@
 
 	const isBasic = $derived(usageLevel === 'basic');
 	const isExpert = $derived(usageLevel === 'expert');
-	const refreshProgress = $derived.by(() => {
-		if (!autoRefreshMs || autoRefreshMs <= 0 || !lastUpdated) return 0;
-		const updatedAt = new Date(lastUpdated).getTime();
-		if (!Number.isFinite(updatedAt)) return 0;
-		const elapsed = Math.max(0, nowTs - updatedAt);
-		const ratio = Math.min(1, elapsed / autoRefreshMs);
-		return ratio;
-	});
-
-	if (browser) {
-		progressTimer = setInterval(() => {
-			nowTs = Date.now();
-		}, 200);
-	}
-
-	onDestroy(() => {
-		if (progressTimer) {
-			clearInterval(progressTimer);
-			progressTimer = null;
-		}
-	});
 </script>
 
-<div class="card sysinfo-heading-card">
-	<div class="head-row">
-		<button
-			type="button"
-			class="section-collapse-btn"
-			onclick={() => (collapsed = !collapsed)}
-			aria-expanded={!collapsed}
-			aria-label={collapsed ? 'Развернуть информацию о системе' : 'Свернуть информацию о системе'}
-		>
-			<span class="section-label">Система</span>
-			<svg
-				class="section-chevron system-collapse-marker"
-				class:open={!collapsed}
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				aria-hidden="true"
+<div class="settings-block sysinfo-block">
+	<div class="card sysinfo-card">
+		<div class="head-row settings-card-head">
+			<button
+				type="button"
+				class="section-collapse-btn"
+				onclick={() => (collapsed = !collapsed)}
+				aria-expanded={!collapsed}
+				aria-label={collapsed ? 'Развернуть информацию о системе' : 'Свернуть информацию о системе'}
 			>
-				<polyline points="6 9 12 15 18 9" />
-			</svg>
-		</button>
-		{#if !isBasic}
-			<div class="head-actions">
-				{#if updatedLabel}
-					<span class="updated-at" title="Последнее обновление">
-						<span class="live-dot" class:live-dot-loading={refreshing}></span>
-						{updatedLabel}
-					</span>
-				{/if}
-				<button
-					type="button"
-					class="refresh-btn"
-					class:timer-enabled={isExpert && autoRefreshMs > 0}
-					onclick={() => onrefresh?.()}
-					disabled={refreshing}
-					aria-label="Обновить информацию о роутере"
-					title="Обновить"
-					style={`--refresh-progress:${refreshProgress * 360}deg;`}
+				<SettingsSectionLabel label="Система" icon={Router} tone="blue" inline />
+				<svg
+					class="section-chevron system-collapse-marker"
+					class:open={!collapsed}
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					aria-hidden="true"
 				>
-					<svg class="refresh-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-						<path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-					</svg>
-				</button>
-			</div>
-		{/if}
-	</div>
+					<polyline points="6 9 12 15 18 9" />
+				</svg>
+			</button>
+			{#if !isBasic}
+				<div class="head-actions">
+					{#if updatedLabel}
+						<span class="updated-at" title="Последнее обновление">
+							<span class="live-dot" class:live-dot-loading={refreshing}></span>
+							{updatedLabel}
+						</span>
+					{/if}
+				</div>
+			{/if}
+		</div>
 
-	<div class="collapsible-body" class:body-hidden={collapsed}>
+		<div class="collapsible-body" class:body-hidden={collapsed}>
 	<div class="setting-row">
 		<span class="info-key">AWGM</span>
 		<span class="info-val">{systemInfo.version}</span>
@@ -271,22 +236,20 @@
 		</details>
 	{/if}
 	</div>
+	</div>
 </div>
 
 <style>
-	.head-row {
+	.sysinfo-block > .card {
+		padding: 1rem;
+	}
+
+	.settings-card-head {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-	}
-
-	.sysinfo-heading-card {
-		padding-top: 0.5rem;
-		padding-bottom: 0.75rem;
-	}
-
-	.section-label {
-		margin-bottom: 0;
+		gap: 0.75rem;
+		margin-bottom: 0.5rem;
 	}
 
 	.section-collapse-btn {
@@ -367,12 +330,6 @@
 		column-gap: 0.75rem;
 	}
 
-	.collapsible-body > .setting-row:first-child {
-		margin-top: 0.65rem;
-		border-top: 1px solid var(--color-border);
-		padding-top: 0.75rem;
-	}
-
 	.collapsible-body > .setting-row .info-val {
 		min-width: 0;
 		justify-self: end;
@@ -407,53 +364,6 @@
 	.live-dot-loading {
 		background: var(--color-warning, var(--color-accent));
 		animation: pulse 1s ease-in-out infinite;
-	}
-
-	.refresh-btn {
-		position: relative;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 28px;
-		height: 28px;
-		border-radius: 6px;
-		border: 1px solid var(--color-border);
-		background: transparent;
-		color: var(--color-text-muted);
-		cursor: pointer;
-		transition: all var(--t-fast) ease;
-	}
-
-	.refresh-btn.timer-enabled::before {
-		content: '';
-		position: absolute;
-		inset: -1px;
-		border-radius: inherit;
-		padding: 1px;
-		background: conic-gradient(var(--color-accent) var(--refresh-progress), transparent 0deg);
-		-webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-		mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-		-webkit-mask-composite: xor;
-		mask-composite: exclude;
-		pointer-events: none;
-		opacity: 0.95;
-	}
-
-	.refresh-btn:hover:not(:disabled) {
-		color: var(--color-accent);
-		background: var(--color-bg-hover);
-	}
-
-	.refresh-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.refresh-icon {
-		position: relative;
-		z-index: 1;
-		width: 15px;
-		height: 15px;
 	}
 
 	@keyframes pulse {

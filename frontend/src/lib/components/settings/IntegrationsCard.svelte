@@ -1,10 +1,12 @@
 <script lang="ts">
 	import type { SingboxStatus, HydraRouteStatus } from '$lib/types';
 	import { Button, Modal, StatusDot } from '$lib/components/ui';
+	import SettingsSectionLabel from './SettingsSectionLabel.svelte';
 	import { copyToClipboard } from '$lib/utils/clipboard';
 	import { singboxInstallProgress } from '$lib/stores/singboxInstall';
 	import { formatBytes } from '$lib/utils/format';
 	import { stripAnsi } from '$lib/utils/ansi';
+	import { Blocks } from 'lucide-svelte';
 
 	interface Props {
 		singboxStatus: SingboxStatus | null;
@@ -115,9 +117,9 @@
 </script>
 
 {#if showSingbox || showHydra}
-	<div class="card">
-		<div class="section-label">Интеграции</div>
-
+	<div class="settings-block">
+		<div class="card">
+		<SettingsSectionLabel label="Интеграции" icon={Blocks} tone="purple" header />
 		{#if showSingbox}
 			<div class="setting-row">
 				<div class="integration-item">
@@ -257,6 +259,7 @@
 				{/if}
 			</div>
 		{/if}
+		</div>
 	</div>
 {/if}
 
@@ -330,7 +333,7 @@
 	.error-pre {
 		margin: 0;
 		padding: 0.75rem;
-		background: var(--color-bg-tertiary);
+		background: var(--color-settings-control-bg);
 		border-radius: var(--radius-sm);
 		font-family: var(--font-mono);
 		font-size: 0.75rem;
@@ -414,7 +417,7 @@
 	.progress-bar {
 		position: relative;
 		height: 6px;
-		background: var(--color-bg-tertiary, rgba(0, 0, 0, 0.08));
+		background: var(--color-settings-control-bg, rgba(0, 0, 0, 0.08));
 		border-radius: 3px;
 		overflow: hidden;
 	}

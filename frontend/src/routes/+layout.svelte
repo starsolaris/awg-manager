@@ -6,6 +6,7 @@
 	import { page } from '$app/stores';
 	import { theme } from '$lib/stores/theme';
 	import { compactLayout, isCompactLayoutActive } from '$lib/stores/compactLayout';
+	import { settingsSectionIconMode } from '$lib/stores/settingsSectionIconMode';
 	import { serviceLetterIcons } from '$lib/stores/serviceLetterIcons';
 	import { auth, isAuthenticated, isLoading } from '$lib/stores/auth';
 	import { notifications } from '$lib/stores/notifications';
@@ -338,6 +339,7 @@
 	onMount(async () => {
 		theme.init();
 		compactLayout.init();
+		settingsSectionIconMode.init();
 		serviceLetterIcons.init();
 		await auth.checkStatus();
 	});

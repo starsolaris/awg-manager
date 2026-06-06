@@ -20,6 +20,7 @@
 		SettingsFooter,
 		UsageLevelCard,
 		DevelopChannelGateModal,
+		SettingsSectionLabel,
 	} from "$lib/components/settings";
 	import { setSettings as setGlobalSettings } from "$lib/stores/settings";
 	import {
@@ -48,6 +49,15 @@
 	import { hasDevelopChannelQuizPassed } from "$lib/utils/developChannelGate";
 	import { developFeedbackFabVisible } from "$lib/stores/developFeedbackFab";
 	import { pluralize, AVAILABLE_WORDS, TUNNEL_WORDS } from "$lib/utils/pluralize";
+	import {
+		CircleArrowDown,
+		Lock,
+		CloudDownload,
+		ScrollText,
+		Activity,
+		Wrench,
+		Power,
+	} from "lucide-svelte";
 
 	const expandUsageLevel = $derived($page.url.searchParams.has('mode'));
 	const highlightFeedbackFab = $derived($page.url.searchParams.has('feedbackFab'));
@@ -684,11 +694,11 @@ $effect(() => {
 					autoRefreshMs={30000}
 				/>
 
-				<div class="card">
-					<div class="section-label">
-						<span>Обновление AWGM</span>
+				<div class="settings-block">
+					<div class="card">
+						<SettingsSectionLabel label="Обновление AWGM" icon={CircleArrowDown} tone="green" header />
+						<UpdateSection bind:updateInfo />
 					</div>
-					<UpdateSection bind:updateInfo />
 				</div>
 
 				<IntegrationsCard
@@ -721,8 +731,9 @@ $effect(() => {
 				<ThemeSchemeCard />
 			{/if}
 
-				<div class="card">
-					<div class="section-label">Доступ</div>
+				<div class="settings-block">
+					<div class="card">
+					<SettingsSectionLabel label="Доступ" icon={Lock} tone="blue" header />
 					<div class="setting-row toggle-inline-row">
 						<div class="flex flex-col gap-1">
 							<span class="font-medium">Авторизация</span>
@@ -732,10 +743,12 @@ $effect(() => {
 						</div>
 						<Toggle checked={settings.authEnabled} onchange={toggleAuth} disabled={saving} />
 					</div>
+					</div>
 				</div>
 
-				<div class="card">
-					<div class="section-label">Загрузки и обновления</div>
+				<div class="settings-block">
+					<div class="card">
+					<SettingsSectionLabel label="Загрузки и обновления" icon={CloudDownload} tone="orange" header />
 					<div class="setting-row toggle-inline-row">
 						<div class="flex flex-col gap-1">
 							<span class="font-medium">Автопроверка обновлений</span>
@@ -789,21 +802,25 @@ $effect(() => {
 							/>
 						</div>
 					{/if}
+					</div>
 				</div>
 
-				<div class="card">
-					<div class="section-label">Логирование</div>
+				<div class="settings-block">
+					<div class="card">
+					<SettingsSectionLabel label="Логирование" icon={ScrollText} tone="slate" header />
 					<LoggingSettings
 						bind:settings
 						{saving}
 						onToggle={toggleLogging}
 						onSave={saveLoggingSettings}
 					/>
+					</div>
 				</div>
 
 				{#if $usageLevel === "expert"}
-				<div class="card">
-					<div class="section-label">Проверка пинга</div>
+				<div class="settings-block">
+					<div class="card">
+					<SettingsSectionLabel label="Проверка пинга" icon={Activity} tone="teal" header />
 					<div class="setting-row ping-target-setting">
 						<div class="flex flex-col gap-1">
 							<span class="font-medium">Цели проверки</span>
@@ -839,14 +856,16 @@ $effect(() => {
 							</div>
 						</div>
 					</div>
+					</div>
 				</div>
 
-				<div
-					id="feedback-fab"
-					class="card settings-highlight-target"
-					class:highlighted={highlightFeedbackFab}
-				>
-					<div class="section-label">Расширенные</div>
+				<div class="settings-block">
+					<div
+						id="feedback-fab"
+						class="card settings-highlight-target"
+						class:highlighted={highlightFeedbackFab}
+					>
+					<SettingsSectionLabel label="Расширенные" icon={Wrench} tone="indigo" header />
 					<div class="setting-row api-key-setting">
 						<div class="flex flex-col gap-1">
 							<span class="font-medium">API Key</span>
@@ -911,13 +930,15 @@ $effect(() => {
 							/>
 						</div>
 					{/if}
+					</div>
 				</div>
 				{/if}
 			</main>
 		</div>
 
-		<div class="card actions-card">
-			<div class="section-label">Действия</div>
+		<div class="settings-block">
+			<div class="card actions-card">
+			<SettingsSectionLabel label="Действия" icon={Power} tone="red" header />
 			<div class="setting-row">
 				<div class="flex flex-col gap-1">
 					<span class="font-medium">Перезапуск AWGM</span>
@@ -980,6 +1001,7 @@ $effect(() => {
 					</div>
 				</div>
 			{/if}
+			</div>
 		</div>
 
 		<div class="settings-doc-block">
@@ -1028,13 +1050,10 @@ $effect(() => {
 </PageContainer>
 
 <style>
-	/* Единый шаг сетки страницы настроек: колонки, стеки, до «Действий», до блока документации, шаг между строками там */
-	.settings-layout {
-		--settings-gap: 0.765rem;
-	}
+	/* Сетка страницы настроек — базовый layout/gap в app.css (.settings-layout) */
 
 	.settings-doc-block {
-		margin-top: var(--settings-gap);
+		margin-top: 0;
 	}
 
 	.settings-grid {
@@ -1063,18 +1082,8 @@ $effect(() => {
 		margin: 0;
 	}
 
-	.actions-card {
-		margin-top: var(--settings-gap);
-	}
-
-	/* Между строками — тот же шаг, что и между карточками (сумма половин padding) */
 	.actions-card > .setting-row {
-		padding-block: calc(var(--settings-gap) * 0.5);
 		align-items: center;
-	}
-
-	.actions-card > .setting-row:last-of-type {
-		padding-bottom: 0;
 	}
 
 	.action-buttons {
@@ -1140,25 +1149,10 @@ $effect(() => {
 		min-width: 0;
 	}
 
-	.settings-text-input {
+	.settings-text-input,
+	.api-key-input {
 		width: 100%;
 		max-width: none;
-		height: 32px;
-		min-height: 32px;
-		max-height: 32px;
-		box-sizing: border-box;
-		padding: 0.375rem 0.5rem;
-		font-family: var(--font-mono, ui-monospace, monospace);
-		font-size: 0.8rem;
-		background: var(--bg, var(--color-bg));
-		border: 1px solid var(--border, var(--color-border));
-		border-radius: 4px;
-		color: var(--text, var(--color-text));
-	}
-
-	.settings-text-input:focus {
-		outline: 2px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
-		border-color: var(--color-primary);
 	}
 
 	.ping-target-action {
@@ -1180,25 +1174,9 @@ $effect(() => {
 	}
 
 	.api-key-input {
-		width: 100%;
-		max-width: none;
-		height: 32px;
-		min-height: 32px;
-		max-height: 32px;
-		box-sizing: border-box;
-		padding: 0.375rem 0.5rem;
-		font-family: var(--font-mono, ui-monospace, monospace);
-		font-size: 0.8rem;
-		background: var(--bg, var(--color-bg));
-		border: 1px solid var(--border, var(--color-border));
-		border-radius: 4px;
-		color: var(--text, var(--color-text));
 		cursor: pointer;
 	}
-	.api-key-input:read-only {
-		opacity: 0.85;
-		cursor: text;
-	}
+
 	.api-key-action {
 		display: flex;
 		align-items: stretch;

@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import '@skeletonlabs/skeleton';
 @import './lib/styles/route-actions.css';
+@import './lib/styles/tunnel-layout.css';
 
 /* ─── Self-hosted IBM Plex (Latin + Cyrillic subsets) ─── */
 @font-face {
@@ -84,11 +85,15 @@
   --color-warning: #e0af68;
   --color-info: #7dcfff;
 
-  /* Surfaces — 4-step ramp */
+  /* Surfaces — Tokyo Night ramp: editor → sidebar/inset → highlight */
   --color-bg-primary: #1a1b26;
   --color-bg-secondary: #16161e;
   --color-bg-tertiary: #24283b;
   --color-bg-hover: #292e42;
+  /** Settings cards/panels — inset (secondary); controls — highlight (tertiary) */
+  --color-settings-surface-bg: var(--color-bg-secondary);
+  /** Settings controls — highlight layer; light theme uses darker inset (tertiary) */
+  --color-settings-control-bg: var(--color-bg-tertiary);
   /** Icon tile on route cards — contrasts with --color-bg-secondary card surface */
   --color-icon-tile-bg: var(--color-bg-tertiary);
 
@@ -182,6 +187,8 @@ html.light, [data-theme="light"] {
   --color-bg-secondary: #f0f0f3;
   --color-bg-tertiary: #d5d6db;
   --color-bg-hover: #cacbd2;
+  --color-settings-surface-bg: var(--color-bg-secondary);
+  --color-settings-control-bg: var(--color-bg-tertiary);
 
   --color-text-primary: #343b58;
   --color-text-secondary: #434754;
@@ -296,22 +303,7 @@ html.light, [data-theme="light"] {
   --lh-body:  1.5;
 }
 
-/* List mode — rem scale aligned with .awg-list-* (+page.svelte). */
-:is(
-  .singbox-tunnel-list-table,
-  .singbox-sub-list-table,
-  .member-list-table,
-  .awg-list-table-track > .sub-list-group,
-  .awg-list-table-track > .sub-active-list-group
-) {
-  --sbx-card-title: 0.9375rem;
-  --sbx-card-meta: 0.75rem;
-  --sbx-card-value: 0.8125rem;
-  --sbx-card-note: 0.75rem;
-  --sbx-card-badge: 0.625rem;
-  --sbx-card-status: 0.8125rem;
-  --sbx-card-action: 0.75rem;
-}
+/* List mode rem scale — see tunnel-layout.css */
 
 /* Компактная ширина — как в v2.8.2 / базовом режиме: main 960px, узкие боковые поля. */
 html[data-layout-compact='true'] {
@@ -710,6 +702,130 @@ label {
 	margin-bottom: 0.5rem;
 }
 
+.settings-block {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.settings-block > .card {
+	background: var(--color-settings-surface-bg);
+}
+
+.settings-layout .card > .settings-section-label.header + .setting-row {
+	padding-top: 0;
+}
+
+.settings-layout {
+	--settings-gap: 0.765rem;
+	display: flex;
+	flex-direction: column;
+	gap: var(--settings-gap);
+}
+
+/* Settings — controls on inset cards use highlight layer */
+.settings-layout .btn.variant-secondary {
+	background: var(--color-settings-control-bg);
+}
+
+.settings-layout .btn.variant-secondary:hover:not(:disabled):not(.is-disabled) {
+	background: var(--color-bg-hover);
+}
+
+.settings-layout .toggle-container .toggle-slider {
+	background: var(--color-settings-control-bg);
+}
+
+.settings-layout .toggle-container:hover input:not(:checked) ~ .toggle-slider {
+	background: var(--color-bg-hover);
+}
+
+.settings-layout .segmented-control {
+	background: var(--color-settings-control-bg);
+}
+
+.settings-layout .field .trigger {
+	background: var(--color-settings-control-bg);
+}
+
+.settings-layout .btn.variant-outline-primary {
+	background: var(--color-settings-control-bg);
+}
+
+/* Settings text/number fields — one surface for inputs, dropdowns, toggles */
+.settings-layout input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='hidden']),
+.settings-layout textarea,
+.settings-layout select {
+	box-sizing: border-box;
+	background: var(--color-settings-control-bg);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-sm);
+	color: var(--color-text-primary);
+	font: inherit;
+	font-size: 13px;
+	line-height: 1.4;
+	transition: border-color var(--t-fast) ease;
+}
+
+.settings-layout input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='hidden'])::placeholder,
+.settings-layout textarea::placeholder {
+	color: var(--color-text-muted);
+}
+
+.settings-layout input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='hidden']):focus,
+.settings-layout textarea:focus,
+.settings-layout select:focus {
+	outline: none;
+	border-color: var(--color-accent);
+}
+
+.settings-layout input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='hidden']):disabled,
+.settings-layout textarea:disabled,
+.settings-layout select:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.settings-layout input[type='number']::-webkit-outer-spin-button,
+.settings-layout input[type='number']::-webkit-inner-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+
+.settings-layout input[type='number'] {
+	-moz-appearance: textfield;
+	appearance: textfield;
+}
+
+.settings-layout .ping-target-field input,
+.settings-layout .api-key-controls input,
+.settings-layout .num-input input,
+.settings-layout .inline-form input[type='number'],
+.settings-layout .inline-form input[type='time'] {
+	height: 32px;
+	min-height: 32px;
+	max-height: 32px;
+	padding: 0.375rem 0.5rem;
+	max-width: none;
+	color: var(--color-text-primary);
+}
+
+.settings-layout .ping-target-field input,
+.settings-layout .api-key-controls input {
+	font-family: var(--font-mono, ui-monospace, monospace);
+	font-size: 0.8rem;
+}
+
+.settings-layout .api-key-controls input:read-only {
+	opacity: 0.85;
+	cursor: text;
+}
+
+.settings-layout .num-input input {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
 .settings-stack {
 	display: flex;
 	flex-direction: column;
@@ -775,7 +891,7 @@ label {
 
 .settings-panel {
 	padding: 1rem;
-	background: var(--bg-tertiary);
+	background: var(--color-settings-surface-bg);
 	border-radius: 8px;
 }
 
