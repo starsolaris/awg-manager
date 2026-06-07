@@ -17,6 +17,7 @@
 		TunnelPingButton,
 		TunnelTitleRow,
 		TunnelMetaText,
+		TunnelToolbarViewRow,
 	} from '$lib/components/tunnels';
 	import { TunnelListActions } from '$lib/components/ui';
 	import TunnelDiagnosticsModal from '$lib/components/testing/TunnelDiagnosticsModal.svelte';
@@ -71,7 +72,6 @@
 	import { Download } from 'lucide-svelte';
 	import CreateIcon from '$lib/components/ui/icons/CreateIcon.svelte';
 	import { formatRunningSub, pluralForm, SUBSCRIPTION_WORDS, TUNNEL_WORDS } from '$lib/utils/pluralize';
-	import TunnelToolbarViewRow from '$lib/components/tunnels/TunnelToolbarViewRow.svelte';
 	import {
 		awgTunnelTableSort,
 		singboxSubscriptionTableSort,

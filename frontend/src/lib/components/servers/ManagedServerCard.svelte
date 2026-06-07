@@ -101,7 +101,6 @@
 	});
 
 	let onlineCount = $derived(stats?.peers?.filter(p => p.online).length ?? 0);
-	let totalPeers = $derived((server.peers ?? []).length);
 	let isUp = $derived(stats?.status === 'up');
 	let totalRx = $derived(stats?.peers?.reduce((sum, p) => sum + p.rxBytes, 0) ?? 0);
 	let totalTx = $derived(stats?.peers?.reduce((sum, p) => sum + p.txBytes, 0) ?? 0);
@@ -376,12 +375,6 @@
 			</div>
 		</div>
 		<div class="header-right">
-			<!-- TODO: вернуть индикатор онлайн-пиров
-			<div class="server-status" title={isUp ? 'Сервер включён' : 'Сервер выключен'}>
-				<span class="led" class:led-up={isUp} class:led-down={!isUp} aria-hidden="true"></span>
-				<span class="peer-count">{onlineCount}/{totalPeers}</span>
-			</div>
-			-->
 			<div class="header-actions">
 			<Button
 				variant="ghost"
@@ -698,22 +691,6 @@
 		margin-left: auto;
 	}
 
-	/*
-	.server-status {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		flex-shrink: 0;
-	}
-
-	.peer-count {
-		font-size: 0.875rem;
-		font-weight: 500;
-		font-variant-numeric: tabular-nums;
-		color: var(--text-secondary);
-	}
-	*/
-
 	.header-actions {
 		display: flex;
 		flex-wrap: nowrap;
@@ -862,27 +839,6 @@
 		font-size: 0.8125rem;
 		color: var(--text-muted);
 	}
-
-
-	/* LED indicators — reserved for server-status block
-	.led {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		flex-shrink: 0;
-		transition: background 0.3s ease, box-shadow 0.3s ease;
-	}
-
-	.led-up {
-		background: var(--success, #22c55e);
-		box-shadow: 0 0 4px var(--success, #22c55e);
-	}
-
-	.led-down {
-		background: var(--text-muted);
-	}
-	*/
-
 
 	@media (max-width: 640px) {
 		.peers-header {

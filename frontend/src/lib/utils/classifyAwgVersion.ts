@@ -9,7 +9,6 @@ function isRange(value: string | undefined | null): boolean {
 }
 
 function hasAnySignaturePacket(params: ASCParams): boolean {
-	if (!('i1' in params)) return false;
 	const ext = params as ASCParamsExtended;
 	return !!(ext.i1 || ext.i2 || ext.i3 || ext.i4 || ext.i5);
 }

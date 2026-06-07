@@ -139,6 +139,20 @@
 		justify-content: center;
 	}
 
+	.header.header-dense {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: flex-start;
+		gap: 6px;
+	}
+
+	.header-dense-body {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		min-width: 0;
+	}
+
 	.meta-tags-dense {
 		display: flex;
 		flex-wrap: wrap;

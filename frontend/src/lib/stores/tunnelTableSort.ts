@@ -59,37 +59,13 @@ function createTunnelTableSortStore<T extends string>(
 		}
 	}
 
-	const { subscribe, set, update } = writable<TunnelTableSortState<T>>(getInitial());
+	const { subscribe, update } = writable<TunnelTableSortState<T>>(getInitial());
 
 	return {
 		subscribe,
-		setSort(sortBy: T | null, sortAsc: boolean) {
-			const next: TunnelTableSortState<T> = { sortBy, sortAsc };
-			persist(next);
-			set(next);
-		},
-		setSortBy(sortBy: T | null) {
-			update((state) => {
-				if (state.sortBy === sortBy) return state;
-				const next: TunnelTableSortState<T> = {
-					sortBy,
-					sortAsc: true,
-				};
-				persist(next);
-				return next;
-			});
-		},
 		toggleSort(key: T) {
 			update((state) => {
 				const next = cycleTableSort(state, key);
-				persist(next);
-				return next;
-			});
-		},
-		toggleDir() {
-			update((state) => {
-				if (state.sortBy === null) return state;
-				const next = { ...state, sortAsc: !state.sortAsc };
 				persist(next);
 				return next;
 			});

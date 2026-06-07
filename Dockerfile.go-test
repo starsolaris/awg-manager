@@ -10,7 +10,7 @@
 #   ./scripts/dev/go-test-docker.sh run ./internal/managed
 #
 # Одноразовый прогон без постоянного контейнера:
-#   docker compose -f docker-compose.go-test.yml run --rm test ./...
+#   docker compose -f docker-compose.go-test.yml --profile oneshot run --rm test ./...
 
 FROM golang:1.24-bookworm
 
