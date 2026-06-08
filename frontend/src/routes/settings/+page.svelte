@@ -20,6 +20,7 @@
 		SettingsFooter,
 		UsageLevelCard,
 		DevelopChannelGateModal,
+		ExperimentalSettingsCard,
 		SettingsSectionLabel,
 	} from "$lib/components/settings";
 	import { setSettings as setGlobalSettings } from "$lib/stores/settings";
@@ -48,6 +49,8 @@
 	import { waitForBackendRestart } from "$lib/restartRecovery";
 	import { hasDevelopChannelQuizPassed } from "$lib/utils/developChannelGate";
 	import { developFeedbackFabVisible } from "$lib/stores/developFeedbackFab";
+	import { experimentalSettingsUnlocked } from "$lib/stores/experimentalSettingsUnlocked";
+	import { settingsUpdateHighlight } from "$lib/stores/settingsUpdateHighlight";
 	import { pluralize, AVAILABLE_WORDS, TUNNEL_WORDS } from "$lib/utils/pluralize";
 	import {
 		CircleArrowDown,
@@ -695,8 +698,8 @@ $effect(() => {
 					autoRefreshMs={30000}
 				/>
 
-				<div class="settings-block">
-					<div class="card">
+				<div id="awgm-update" class="settings-block">
+					<div class="card settings-highlight-target" class:highlighted={$settingsUpdateHighlight}>
 						<SettingsSectionLabel label="Обновление AWGM" icon={CircleArrowDown} tone="green" header />
 						<UpdateSection bind:updateInfo />
 					</div>
@@ -932,6 +935,10 @@ $effect(() => {
 					{/if}
 					</div>
 				</div>
+
+				{#if $experimentalSettingsUnlocked}
+					<ExperimentalSettingsCard />
+				{/if}
 				{/if}
 			</main>
 		</div>
