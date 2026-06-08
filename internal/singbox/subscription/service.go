@@ -61,10 +61,74 @@ type Service struct {
 	fetchOpts FetchOpts
 	log       *logging.ScopedLogger // nil-safe; sing-box journal (runtime)
 	appLog    *logging.ScopedLogger // nil-safe; app journal (subscription partition)
+	// ndmsProxyEnabled mirrors Settings.CreateNDMSProxyForSingbox. When the
+	// closure is nil the service behaves as if enabled (back-compat for
+	// tests / legacy bootstrap), mirroring OperatorDeps.IsNDMSProxyEnabled.
+	ndmsProxyEnabled func() bool
 }
 
 func NewService(store *Store, mutator ConfigMutator) *Service {
 	return &Service{store: store, mutator: mutator}
+}
+
+// SetNDMSProxyEnabled wires the global "Create NDMS Proxy for sing-box"
+// toggle. When off, Create/Update do not register a ProxyN interface for
+// the subscription (ProxyIndex stays -1); SyncProxies (re-)creates them
+// when the toggle is turned back on.
+func (s *Service) SetNDMSProxyEnabled(fn func() bool) { s.ndmsProxyEnabled = fn }
+
+func (s *Service) proxyEnabled() bool {
+	if s.ndmsProxyEnabled == nil {
+		return true
+	}
+	return s.ndmsProxyEnabled()
+}
+
+// SyncProxies ensures every subscription has its NDMS ProxyN interface when
+// the global toggle is on. It is the toggle-ON counterpart to the gated
+// Create: subscriptions created while the toggle was off carry ProxyIndex=-1
+// and get a freshly allocated proxy here; subscriptions that already had one
+// (index retained across a toggle-off) are re-registered idempotently.
+//
+// Allocation is serialized (createMu) against Create, and each proxy is
+// registered via EnsureProxy — which makes the router slot occupied —
+// before the next index is allocated. AllocProxyIndex scans the live router
+// without a reserved set, so allocating a batch without committing each
+// first would hand out the same index twice.
+func (s *Service) SyncProxies(ctx context.Context) error {
+	if !s.proxyEnabled() {
+		return nil
+	}
+	s.createMu.Lock()
+	defer s.createMu.Unlock()
+	for _, sub := range s.store.List() {
+		if sub.ListenPort == 0 {
+			continue // no data path yet; nothing to wrap
+		}
+		mu := s.lockSub(sub.ID)
+		mu.Lock()
+		idx := sub.ProxyIndex
+		if idx < 0 {
+			alloc, err := s.mutator.AllocProxyIndex(ctx)
+			if err != nil {
+				mu.Unlock()
+				return fmt.Errorf("subscription %s: alloc proxy index: %w", sub.ID, err)
+			}
+			idx = alloc
+		}
+		if err := s.mutator.EnsureProxy(ctx, idx, int(sub.ListenPort), sub.Label); err != nil {
+			mu.Unlock()
+			return fmt.Errorf("subscription %s: ensure proxy: %w", sub.ID, err)
+		}
+		if sub.ProxyIndex < 0 {
+			if err := s.store.SetProxyIndex(sub.ID, idx); err != nil {
+				mu.Unlock()
+				return fmt.Errorf("subscription %s: persist proxy index: %w", sub.ID, err)
+			}
+		}
+		mu.Unlock()
+	}
+	return nil
 }
 
 // SetAppLogger wires UI-visible logging for events outside of the
@@ -152,23 +216,31 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Subscription, er
 		return nil, err
 	}
 
-	proxyIdx, err := s.mutator.AllocProxyIndex(ctx)
-	if err != nil {
-		s.store.Delete(sub.ID)
-		s.logWarn("subscription-create", sub.ID, "failed to allocate proxy index: "+err.Error())
-		return nil, fmt.Errorf("subscription: alloc proxy index: %w", err)
-	}
-	if err := s.store.SetProxyIndex(sub.ID, proxyIdx); err != nil {
-		s.store.Delete(sub.ID)
-		return nil, err
-	}
-	if err := s.mutator.EnsureProxy(ctx, proxyIdx, int(port), sub.Label); err != nil {
-		// Best-effort cleanup: EnsureProxy may have partially registered
-		// the interface before failing. RemoveProxy is idempotent.
-		_ = s.mutator.RemoveProxy(ctx, proxyIdx)
-		s.store.Delete(sub.ID)
-		s.logWarn("subscription-create", sub.ID, "failed to ensure NDMS proxy: "+err.Error())
-		return nil, fmt.Errorf("subscription: register NDMS proxy: %w", err)
+	// NDMS Proxy is only created when the global toggle is on. When off, the
+	// subscription stays proxy-less (ProxyIndex=-1) and routes via its mixed
+	// inbound + selector through the internal sing-box router; SyncProxies
+	// allocates the ProxyN later if the toggle is turned back on.
+	proxyIdx := -1
+	if s.proxyEnabled() {
+		idx, err := s.mutator.AllocProxyIndex(ctx)
+		if err != nil {
+			s.store.Delete(sub.ID)
+			s.logWarn("subscription-create", sub.ID, "failed to allocate proxy index: "+err.Error())
+			return nil, fmt.Errorf("subscription: alloc proxy index: %w", err)
+		}
+		if err := s.store.SetProxyIndex(sub.ID, idx); err != nil {
+			s.store.Delete(sub.ID)
+			return nil, err
+		}
+		proxyIdx = idx
+		if err := s.mutator.EnsureProxy(ctx, idx, int(port), sub.Label); err != nil {
+			// Best-effort cleanup: EnsureProxy may have partially registered
+			// the interface before failing. RemoveProxy is idempotent.
+			_ = s.mutator.RemoveProxy(ctx, idx)
+			s.store.Delete(sub.ID)
+			s.logWarn("subscription-create", sub.ID, "failed to ensure NDMS proxy: "+err.Error())
+			return nil, fmt.Errorf("subscription: register NDMS proxy: %w", err)
+		}
 	}
 
 	if _, err := s.refreshLocked(ctx, sub.ID); err != nil {
@@ -187,7 +259,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Subscription, er
 		// only the startup cleanup sweep would eventually reap. Swallow
 		// the RemoveProxy error: the storage row is going away regardless,
 		// and a stranded ProxyN is recoverable via Settings → cleanup.
-		_ = s.mutator.RemoveProxy(ctx, proxyIdx)
+		if proxyIdx >= 0 {
+			_ = s.mutator.RemoveProxy(ctx, proxyIdx)
+		}
 		_ = s.mutator.Reload(ctx)
 		s.store.Delete(sub.ID)
 		s.logWarn("subscription-create", sub.ID, "initial refresh failed: "+err.Error())
@@ -587,11 +661,13 @@ func (s *Service) Update(id string, patch UpdatePatch) (*Subscription, error) {
 			return sub, fmt.Errorf("reload after mode change: %w", err)
 		}
 	}
-	if patch.Label != nil {
+	if patch.Label != nil && s.proxyEnabled() && sub.ProxyIndex >= 0 {
 		// EnsureProxy is idempotent — re-running with new description updates
 		// NDMS Proxy.description in place. Best-effort: on failure the store
 		// already has the new label, the proxy description stays stale until
 		// next refresh; we surface the error so the UI can show a warning.
+		// Skipped when the toggle is off or the subscription has no ProxyN
+		// (created while off): there is no interface to relabel.
 		if err := s.mutator.EnsureProxy(context.Background(), sub.ProxyIndex, int(sub.ListenPort), sub.Label); err != nil {
 			return sub, fmt.Errorf("sync proxy description: %w", err)
 		}
