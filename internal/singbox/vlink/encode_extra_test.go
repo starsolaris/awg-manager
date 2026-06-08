@@ -103,9 +103,35 @@ func TestEncodeOutbound_ErrorBranches(t *testing.T) {
 // TestEncode_UnknownTransport_FailsClosed: an unknown transport type must not
 // silently degrade to a plain-tcp link.
 func TestEncode_UnknownTransport_FailsClosed(t *testing.T) {
-	raw := []byte(`{"type":"vless","server":"h","server_port":443,"uuid":"3a3b1c2e-9999-4321-aaaa-1234567890ab","transport":{"type":"httpupgrade","path":"/x"}}`)
+	raw := []byte(`{"type":"vless","server":"h","server_port":443,"uuid":"3a3b1c2e-9999-4321-aaaa-1234567890ab","transport":{"type":"quic"}}`)
 	if link, err := EncodeOutbound(raw, ""); err == nil {
-		t.Errorf("expected error for httpupgrade transport, got %q", link)
+		t.Errorf("expected error for quic transport, got %q", link)
+	}
+}
+
+// TestEncode_HTTPUpgrade_RoundTrip: httpupgrade transport survives encode and
+// reparse with its top-level host + path intact (and emits type=httpupgrade).
+func TestEncode_HTTPUpgrade_RoundTrip(t *testing.T) {
+	got, _, link := reparseOutbound(t, map[string]any{
+		"type": "vless", "server": "h.com", "server_port": 443,
+		"uuid":      "3a3b1c2e-9999-4321-aaaa-1234567890ab",
+		"transport": map[string]any{"type": "httpupgrade", "host": "cdn.example.com", "path": "/up"},
+	}, "")
+	if !strings.Contains(link, "type=httpupgrade") {
+		t.Errorf("link missing type=httpupgrade: %q", link)
+	}
+	tr, _ := got["transport"].(map[string]any)
+	if tr == nil {
+		t.Fatalf("no transport in reparsed outbound: %v", got)
+	}
+	if tr["type"] != "httpupgrade" {
+		t.Errorf("transport.type = %v, want httpupgrade", tr["type"])
+	}
+	if tr["host"] != "cdn.example.com" {
+		t.Errorf("transport.host = %v, want cdn.example.com (top-level string)", tr["host"])
+	}
+	if tr["path"] != "/up" {
+		t.Errorf("transport.path = %v, want /up", tr["path"])
 	}
 }
 

@@ -339,9 +339,18 @@ func streamQueryFromOutbound(ob map[string]any) (url.Values, error) {
 			if hosts := stringSliceFromAny(transport["host"]); len(hosts) > 0 {
 				q.Set("host", hosts[0])
 			}
+		case "httpupgrade":
+			network = "httpupgrade"
+			if path, _ := transport["path"].(string); path != "" {
+				q.Set("path", path)
+			}
+			// httpupgrade host is a top-level string (not headers.Host like ws).
+			if host, _ := transport["host"].(string); host != "" {
+				q.Set("host", host)
+			}
 		default:
-			// Unknown transport (e.g. httpupgrade, quic) — fail closed rather
-			// than silently emitting a plain-tcp link that misroutes.
+			// Unknown transport (e.g. quic) — fail closed rather than silently
+			// emitting a plain-tcp link that misroutes.
 			return nil, fmt.Errorf("vlink: unsupported transport type %q", ttype)
 		}
 	}
