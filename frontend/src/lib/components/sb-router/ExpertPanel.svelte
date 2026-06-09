@@ -518,6 +518,7 @@
   <div class="main-grid">
     <div class="col-main">
       <SidePanel
+        section="rules"
         title="Правила маршрутизации"
         count={String($storeRules.length)}
         actionLabel="+ Правило"
@@ -551,6 +552,7 @@
       </SidePanel>
 
       <SidePanel
+        section="ruleSets"
         title="Rule-sets"
         count={String($storeRuleSets.length)}
         actionLabel="+ Набор"
@@ -569,6 +571,7 @@
 
     <div class="col-sidebar">
       <SidePanel
+        section="outbounds"
         title="Outbounds"
         count={String($storeOutbounds.length)}
         actionLabel="+ Outbound"
@@ -583,6 +586,7 @@
       </SidePanel>
 
       <SidePanel
+        section="dnsServers"
         title="DNS-серверы"
         count={String($storeDnsServers.length)}
         actionLabel="+ Сервер"
@@ -619,6 +623,7 @@
       </SidePanel>
 
       <SidePanel
+        section="dnsRewrite"
         title="DNS Rewrite"
         count={String($storeDnsRewrites.length)}
         actionLabel="+ Добавить"
@@ -635,6 +640,7 @@
       </SidePanel>
 
         <SidePanel
+          section="inbounds"
           title="Inbounds"
           count={activeProxyCountLabel}
           actionLabel="+ Добавить"
