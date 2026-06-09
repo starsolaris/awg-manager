@@ -5,6 +5,7 @@ export { mode, setMode, type RouterMode } from './modeStore';
 export { default as RuleCard } from './RuleCard.svelte';
 export { default as MatcherChip } from './MatcherChip.svelte';
 export { default as OutboundTile } from './OutboundTile.svelte';
+export type { OutboundTileSize } from './OutboundTile.svelte';
 export { default as RulesPanel } from './RulesPanel.svelte';
 export type {
   RuleAction,

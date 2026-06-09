@@ -54,52 +54,6 @@ export function countVisibleBadges({
 	return Math.max(1, fit || 1);
 }
 
-/** Правый край контента в main (не выделенной 1fr-ячейки). */
-export function measureMainContentRight(mainEl: HTMLElement): number {
-	const mainRect = mainEl.getBoundingClientRect();
-	let contentRight = mainRect.left;
-	for (const child of mainEl.children) {
-		const r = child.getBoundingClientRect();
-		if (r.width > 0) {
-			contentRight = Math.max(contentRight, r.right);
-		}
-	}
-	return contentRight;
-}
-
-export const RULE_CARD_TUNNEL_BUDGET_MAX = 420;
-export const RULE_CARD_TUNNEL_BUDGET_VW = 0.4;
-
-/** Потолок ширины зоны туннелей в RuleCard. На ПК — 40vw, на мобилке — 420px. */
-export function ruleCardTunnelBudgetCap(viewportWidth: number, mobile: boolean): number {
-	if (mobile) return RULE_CARD_TUNNEL_BUDGET_MAX;
-	return Math.floor(viewportWidth * RULE_CARD_TUNNEL_BUDGET_VW);
-}
-
-export interface RuleCardBadgeBudgetInput {
-	cardRight: number;
-	paddingRight: number;
-	mainContentRight: number;
-	columnGap: number;
-	buttonsWidth: number;
-	trailGap?: number;
-	maxBudget?: number;
-}
-
-/** Бюджет ширины для composite-бейджей в RuleCard (desktop). */
-export function computeRuleCardBadgeBudget({
-	cardRight,
-	paddingRight,
-	mainContentRight,
-	columnGap,
-	buttonsWidth,
-	trailGap = 8,
-	maxBudget = RULE_CARD_TUNNEL_BUDGET_MAX,
-}: RuleCardBadgeBudgetInput): number {
-	const available = cardRight - paddingRight - mainContentRight - columnGap - buttonsWidth - trailGap;
-	return Math.max(0, Math.min(Math.floor(available), maxBudget));
-}
-
 /** Ширина бюджета: поднимаемся к layout-контейнеру, а не к свёрнутому контенту. */
 export function readBadgeRowBudgetWidth(container: HTMLElement): number {
 	let best = 0;

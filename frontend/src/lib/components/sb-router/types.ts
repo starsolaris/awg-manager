@@ -26,20 +26,37 @@ export interface MatcherChip {
   rulesetType?: RuleSetDisplayType;
 }
 
-export type OutboundKind = 'tunnel' | 'awg' | 'direct' | 'block' | 'composite' | 'unknown' | 'sniff' | 'hijack-dns';
+export type OutboundKind =
+	| 'proxy'
+	| 'tunnel'
+	| 'awg'
+	| 'subscription'
+	| 'direct'
+	| 'block'
+	| 'composite'
+	| 'unknown'
+	| 'sniff'
+	| 'hijack-dns';
 
 export interface OutboundDisplay {
   /** Имя outbound'а из singbox config (raw key) */
   name: string;
-  /** Локализованный label для tile ("WARP", "Прямо", "Блок") */
+  /** Локализованный label для tile — основной текст без metaSuffix */
   label: string;
+  /** Суффикс в скобках: sub, t2s0 — единый рендер в OutboundChipLabel */
+  metaSuffix?: string;
   /** Тип — определяет визуальный вариант OutboundTile */
   kind: OutboundKind;
+  /** Цветовая категория бейджа (если не задан — из kind) */
+  tone?: import('./outboundTileTone').OutboundTileTone;
   /** Тип composite (selector / urltest / loadbalance) */
   compositeType?: 'selector' | 'urltest' | 'loadbalance';
-  /** Раскрытые участники composite для простого режима */
-  memberLabels?: string[];
-  memberTitles?: string[];
+  /** Активный участник composite (clash now / selector / urltest) */
+  activeMemberLabel?: string;
+  activeMemberTitle?: string;
+  /** Остальные участники — в +N */
+  otherMemberLabels?: string[];
+  otherMemberTitles?: string[];
 }
 
 export interface RuleCardData {

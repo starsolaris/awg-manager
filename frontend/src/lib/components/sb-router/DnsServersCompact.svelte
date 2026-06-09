@@ -3,19 +3,26 @@
 -->
 
 <script lang="ts">
-  import type { SingboxRouterDNSServer, SingboxRouterDNSRule } from '$lib/types';
+  import type {
+    SingboxProxyGroup,
+    SingboxRouterDNSServer,
+    SingboxRouterDNSRule,
+    SingboxRouterOutbound,
+    SingboxTunnel,
+    Subscription,
+  } from '$lib/types';
   import type { OutboundGroup } from '$lib/components/routing/singboxRouter/outboundOptions';
   import { Badge, Button } from '$lib/components/ui';
-  import { ArrowRight, Trash2, Edit3 } from 'lucide-svelte';
-  import { resolveMemberLabel } from '$lib/utils/memberLabel';
+  import { Trash2, Edit3 } from 'lucide-svelte';
+  import { resolveOutboundDisplay } from './adapters';
+  import OutboundTile from './OutboundTile.svelte';
   import { dnsRuleTarget } from './dnsRuleLabel';
   import { dnsMatcherParts, dnsMatcherSummary } from './dnsMatcherParts';
-
-  const AWG_OPTION_GROUPS = new Set(['AWG туннели', 'Системные WireGuard']);
 
   interface Props {
     servers: SingboxRouterDNSServer[];
     rules: SingboxRouterDNSRule[];
+    outbounds?: SingboxRouterOutbound[];
     onEditServer: (tag: string) => void;
     onEditRule: (idx: number) => void;
     onDeleteRule?: (idx: number) => void;
@@ -23,33 +30,43 @@
     addRuleDisabled?: boolean;
     addRuleTitle?: string;
     outboundOptions?: OutboundGroup[];
+    subscriptions?: Subscription[] | null;
+    proxyGroups?: SingboxProxyGroup[];
+    singboxTunnels?: SingboxTunnel[];
   }
 
   let {
-    servers, rules, onEditServer, onEditRule, onDeleteRule, onAddRule, addRuleDisabled = false, addRuleTitle,
+    servers,
+    rules,
+    outbounds = [],
+    onEditServer,
+    onEditRule,
+    onDeleteRule,
+    onAddRule,
+    addRuleDisabled = false,
+    addRuleTitle,
     outboundOptions = [],
+    subscriptions = null,
+    proxyGroups = [],
+    singboxTunnels = [],
   }: Props = $props();
 
   function subFor(s: SingboxRouterDNSServer): string {
     return `${s.type ?? 'dns'} · ${s.server}`;
   }
 
-  function detourFor(s: SingboxRouterDNSServer): string {
-    return s.detour ?? 'direct';
-  }
-
-  function detourLabelFor(s: SingboxRouterDNSServer): string {
-    const detour = detourFor(s);
-    if (detour === 'direct') return detour;
-    return resolveMemberLabel(detour, null, outboundOptions);
-  }
-
-  function detourVariantFor(s: SingboxRouterDNSServer): 'default' | 'accent' | 'purple' {
-    const detour = detourFor(s);
-    if (detour === 'direct') return 'default';
-    return outboundOptions.some((g) =>
-      AWG_OPTION_GROUPS.has(g.group) && g.items.some((i) => i.value === detour)
-    ) ? 'purple' : 'accent';
+  function detourDisplay(s: SingboxRouterDNSServer) {
+    const detour = s.detour ?? 'direct';
+    const action = detour === 'direct' ? 'direct' as const : 'route' as const;
+    return resolveOutboundDisplay(
+      detour,
+      action,
+      outbounds,
+      outboundOptions,
+      subscriptions,
+      proxyGroups,
+      singboxTunnels,
+    );
   }
 </script>
 
@@ -62,9 +79,9 @@
           <div class="tag">{s.tag}</div>
           <div class="sub">{subFor(s)}</div>
         </div>
-        <Badge variant={detourVariantFor(s)} size="sm" mono title={detourFor(s)}>
-          {detourLabelFor(s)}
-        </Badge>
+        <span class="detour-chip">
+          <OutboundTile outbound={detourDisplay(s)} size="compact" />
+        </span>
       </button>
     {/each}
     {#if servers.length === 0}
@@ -209,6 +226,16 @@
     color: var(--text-muted);
     white-space: normal;
     overflow-wrap: anywhere;
+  }
+  .detour-chip {
+    flex-shrink: 1;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .detour-chip :global(.tone-chip) {
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
   }
   .rules-cap {
     display: flex;

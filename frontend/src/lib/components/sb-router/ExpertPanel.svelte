@@ -17,6 +17,8 @@
   import { onMount } from 'svelte';
   import { singboxRouter as singboxRouterStore } from '$lib/stores/singboxRouter';
   import { subscriptionsStore } from '$lib/stores/subscriptions';
+  import { singboxProxies } from '$lib/stores/singboxProxies';
+  import { singboxTunnels } from '$lib/stores/singbox';
   import { notifications } from '$lib/stores/notifications';
   import { api } from '$lib/api/client';
   import { computeRuleSetUsage } from '$lib/components/routing/singboxRouter';
@@ -539,6 +541,9 @@
           rules={$storeRules}
           outbounds={$storeOutbounds}
           outboundOptions={$storeOptions}
+          subscriptions={$subscriptionsStore.data}
+          proxyGroups={$singboxProxies.data ?? []}
+          singboxTunnels={$singboxTunnels.data ?? []}
           onEdit={(idx) => (ruleEditIdx = idx)}
           onDelete={handleDeleteRule}
           onMove={handleMoveRule}
@@ -601,7 +606,11 @@
         <DnsServersCompact
           servers={$storeDnsServers}
           rules={$storeDnsRules}
+          outbounds={$storeOutbounds}
           outboundOptions={$storeOptions}
+          subscriptions={$subscriptionsStore.data}
+          proxyGroups={$singboxProxies.data ?? []}
+          singboxTunnels={$singboxTunnels.data ?? []}
           onEditServer={(tag) => (dnsServerEditTag = tag)}
           onEditRule={(idx) => (dnsRuleEditIdx = idx)}
           onDeleteRule={handleDeleteDNSRule}

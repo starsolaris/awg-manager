@@ -6,7 +6,7 @@ import type { OutboundGroup } from '$lib/components/routing/singboxRouter/outbou
 const noOutbounds: SingboxRouterOutbound[] = [];
 const noRulesets: Record<string, string> = {};
 const awgOptions: OutboundGroup[] = [
-  { group: 'AWG туннели', items: [{ value: 'awg-awg10', label: 'Office VPN (t2s10)' }] },
+  { group: 'AWG туннели', items: [{ value: 'awg-awg10', label: 'Office VPN (nwg0)' }] },
 ];
 
 const catalog: CatalogPreset[] = [
@@ -53,17 +53,17 @@ describe('systemRuleTooltip', () => {
 describe('resolveOutboundDisplay', () => {
   it('direct outbound', () => {
     const d = resolveOutboundDisplay('direct', 'route', noOutbounds);
-    expect(d).toEqual({ name: 'direct', label: 'Прямо', kind: 'direct' });
+    expect(d).toEqual({ name: 'direct', label: 'Прямо', kind: 'direct', tone: 'direct' });
   });
 
   it('block outbound', () => {
     const d = resolveOutboundDisplay('block', 'route', noOutbounds);
-    expect(d).toEqual({ name: 'block', label: 'Блок', kind: 'block' });
+    expect(d).toEqual({ name: 'block', label: 'Блок', kind: 'block', tone: 'block' });
   });
 
   it('reject outbound aliased to block', () => {
     const d = resolveOutboundDisplay('reject', 'route', noOutbounds);
-    expect(d).toEqual({ name: 'reject', label: 'Блок', kind: 'block' });
+    expect(d).toEqual({ name: 'reject', label: 'Блок', kind: 'block', tone: 'block' });
   });
 
   it('action=block returns block regardless of outbound name', () => {
@@ -80,9 +80,10 @@ describe('resolveOutboundDisplay', () => {
     expect(d.name).toBe('warp');
     expect(d.label).toBe('warp');
     expect(d.kind).toBe('tunnel');
+    expect(d.tone).toBe('proxy');
   });
 
-  it('composite outbound (selector) expands member labels', () => {
+  it('composite outbound (selector) shows active member and others', () => {
     const ob: SingboxRouterOutbound[] = [
       {
         tag: 'group-1',
@@ -91,9 +92,13 @@ describe('resolveOutboundDisplay', () => {
         source: 'router',
       },
     ];
-    const d = resolveOutboundDisplay('group-1', 'route', ob);
+    const d = resolveOutboundDisplay('group-1', 'route', ob, [], null, [
+      { tag: 'group-1', type: 'selector', now: 'node-b', members: [] },
+    ]);
     expect(d.kind).toBe('composite');
-    expect(d.memberLabels).toEqual(['node-a', 'node-b']);
+    expect(d.tone).toBe('composite');
+    expect(d.activeMemberLabel).toBe('node-b');
+    expect(d.otherMemberLabels).toEqual(['node-a']);
     expect(d.compositeType).toBe('selector');
   });
 
@@ -118,19 +123,42 @@ describe('resolveOutboundDisplay', () => {
       mode: 'selector' as const,
     }];
     const d = resolveOutboundDisplay('sub-x', 'route', [], [], subs);
-    expect(d.kind).toBe('composite');
-    expect(d.memberLabels).toEqual(['host.example']);
+    expect(d.kind).toBe('subscription');
+    expect(d.tone).toBe('subscription');
+    expect(d.activeMemberLabel).toBe('host.example');
     expect(d.label).toBe('My Sub');
+    expect(d.metaSuffix).toBe('sub');
+    expect(d.otherMemberLabels).toEqual([]);
+  });
+
+  it('solo sing-box proxy appends proxyInterface', () => {
+    const tunnels = [{
+      tag: 'vless-nl',
+      protocol: 'vless' as const,
+      server: 'x',
+      port: 443,
+      security: 'tls' as const,
+      transport: 'tcp' as const,
+      listenPort: 11000,
+      proxyInterface: 't2s1',
+      connectivity: { connected: true, latency: 50 },
+      running: true,
+    }];
+    const opts = [{ group: 'Sing-box туннели', items: [{ value: 'vless-nl', label: 'vless-nl' }] }];
+    const d = resolveOutboundDisplay('vless-nl', 'route', [], opts, null, [], tunnels);
+    expect(d.label).toBe('vless-nl');
+    expect(d.metaSuffix).toBe('t2s1');
+    expect(d.kind).toBe('proxy');
   });
 
   it('unknown outbound by name', () => {
     const d = resolveOutboundDisplay('mystery', 'route', noOutbounds);
-    expect(d).toEqual({ name: 'mystery', label: 'mystery', kind: 'unknown' });
+    expect(d).toEqual({ name: 'mystery', label: 'mystery', kind: 'unknown', tone: 'unknown' });
   });
 
   it('AWG outbound tag uses catalog label and AWG visual kind', () => {
     const d = resolveOutboundDisplay('awg-awg10', 'route', noOutbounds, awgOptions);
-    expect(d).toEqual({ name: 'awg-awg10', label: 'Office VPN (t2s10)', kind: 'awg' });
+    expect(d).toEqual({ name: 'awg-awg10', label: 'Office VPN', metaSuffix: 'nwg0', kind: 'awg', tone: 'awg' });
   });
 
   it('undefined outbound → direct fallback', () => {
@@ -261,7 +289,8 @@ describe('singboxRuleToCard', () => {
       awgOptions,
     );
     expect(card.outbound.kind).toBe('awg');
-    expect(card.outbound.label).toBe('Office VPN (t2s10)');
+    expect(card.outbound.label).toBe('Office VPN');
+    expect(card.outbound.metaSuffix).toBe('nwg0');
   });
 
   it('produces a system rule card', () => {

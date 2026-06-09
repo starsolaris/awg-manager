@@ -16,6 +16,8 @@
   import { isSystemRule, singboxRuleToCard } from './adapters';
   import { presetCatalog } from '$lib/stores/presets';
   import { subscriptionsStore } from '$lib/stores/subscriptions';
+  import { singboxProxies } from '$lib/stores/singboxProxies';
+  import { singboxTunnels } from '$lib/stores/singbox';
   import RuleEditModal from '$lib/components/routing/singboxRouter/RuleEditModal.svelte';
   import RuleSetAddModal from '$lib/components/routing/singboxRouter/RuleSetAddModal.svelte';
   import { computeRuleSetUsage } from '$lib/components/routing/singboxRouter';
@@ -58,6 +60,8 @@
         $presetCatalog,
         $ruleSets,
         $subscriptionsStore.data,
+        $singboxProxies.data ?? [],
+        $singboxTunnels.data ?? [],
       ),
     ),
   );

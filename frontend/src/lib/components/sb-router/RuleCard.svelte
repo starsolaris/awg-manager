@@ -11,7 +11,7 @@
   import RuleOutboundAction from './RuleOutboundAction.svelte';
   import { Badge } from '$lib/components/ui';
   import { Edit3, GripVertical, Trash2 } from 'lucide-svelte';
-  import { computeRuleCardBadgeBudget, measureMainContentRight, ruleCardTunnelBudgetCap } from '$lib/utils/fittingBadgeLayout';
+  import { outboundDisplayTitle, outboundFullLabel } from './outboundLabelFormat';
 
   interface Props {
     card: RuleCardData;
@@ -43,70 +43,21 @@
   let editTip = $derived(actionTooltip('edit', card, index));
   let deleteTip = $derived(actionTooltip('delete', card, index));
 
-  let cardEl = $state<HTMLElement | null>(null);
-  let mainEl = $state<HTMLElement | null>(null);
-  let trailEl = $state<HTMLElement | null>(null);
-  let badgeBudget = $state<number | undefined>(undefined);
-
   const isCompositeOutbound = $derived(
-    card.outbound.kind === 'composite' && (card.outbound.memberLabels?.length ?? 0) > 0,
+    (card.outbound.kind === 'composite' || card.outbound.kind === 'subscription')
+      && !!card.outbound.activeMemberLabel,
   );
-
-  function updateBadgeBudget() {
-    if (!isCompositeOutbound || !cardEl || !mainEl) {
-      badgeBudget = undefined;
-      return;
-    }
-    const cardRect = cardEl.getBoundingClientRect();
-    const buttonsEl = trailEl?.querySelector('.right-slot');
-    const buttonsW = buttonsEl?.getBoundingClientRect().width ?? 0;
-    const styles = getComputedStyle(cardEl);
-    const padR = parseFloat(styles.paddingRight) || 0;
-    const gap = parseFloat(styles.columnGap || styles.gap) || 12;
-    const mobile = window.matchMedia('(max-width: 768px)').matches;
-    const tunnelCap = ruleCardTunnelBudgetCap(window.innerWidth, mobile);
-    if (mobile) {
-      const actionEl = trailEl?.querySelector('.action');
-      const w = actionEl?.clientWidth;
-      badgeBudget = w != null ? Math.min(w, tunnelCap) : undefined;
-      return;
-    }
-    badgeBudget = computeRuleCardBadgeBudget({
-      cardRight: cardRect.right,
-      paddingRight: padR,
-      mainContentRight: measureMainContentRight(mainEl),
-      columnGap: gap,
-      buttonsWidth: buttonsW,
-      maxBudget: tunnelCap,
-    });
-  }
-
-  $effect(() => {
-    if (!cardEl) return;
-    void isCompositeOutbound;
-    const ro = new ResizeObserver(() => {
-      updateBadgeBudget();
-      requestAnimationFrame(() => {
-        updateBadgeBudget();
-      });
-    });
-    ro.observe(cardEl);
-    if (mainEl) ro.observe(mainEl);
-    if (trailEl) ro.observe(trailEl);
-    const onResize = () => updateBadgeBudget();
-    window.addEventListener('resize', onResize);
-    updateBadgeBudget();
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', onResize);
-    };
-  });
 
   function outboundLabel(cardData: RuleCardData): string {
     if (cardData.action === 'block' || cardData.outbound.kind === 'block') return 'Заблокировать';
     if (cardData.outbound.kind === 'direct') return 'Напрямую';
-    if (cardData.outbound.memberLabels?.length) return cardData.outbound.memberLabels.join(', ');
-    return cardData.outbound.label;
+    if (
+      (cardData.outbound.kind === 'composite' || cardData.outbound.kind === 'subscription')
+      && cardData.outbound.activeMemberLabel
+    ) {
+      return `${outboundDisplayTitle(cardData.outbound)} → ${cardData.outbound.activeMemberLabel}`;
+    }
+    return outboundDisplayTitle(cardData.outbound);
   }
 
   function ruleActionTarget(cardData: RuleCardData, idx: number): string {
@@ -141,7 +92,7 @@
 </script>
 
 <div class="card-wrap" title={card.isSystem ? card.tooltip : undefined}>
-<div class="card" class:is-system={card.isSystem} class:dragging bind:this={cardEl}>
+<div class="card" class:is-system={card.isSystem} class:dragging>
   <!-- Order number -->
   <div class="order">{orderStr}</div>
 
@@ -162,7 +113,7 @@
   </div>
 
   <!-- Service tile or generic icon-tile + matchers -->
-  <div class="main" bind:this={mainEl}>
+  <div class="main">
     {#if useServiceTile}
       <ServiceTile serviceKey={card.serviceKey} name={card.title} sub={card.subtitle} />
     {:else}
@@ -200,9 +151,9 @@
     {/if}
   </div>
 
-  <div class="trail" bind:this={trailEl}>
+  <div class="trail">
     <div class="action" class:composite={isCompositeOutbound}>
-      <RuleOutboundAction outbound={card.outbound} badgeBudget={badgeBudget} />
+      <RuleOutboundAction outbound={card.outbound} />
     </div>
 
     {#if card.isSystem}
@@ -401,12 +352,6 @@
     min-width: 0;
     max-width: 11rem;
   }
-  .action :global(.label-mono) {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-width: 0;
-  }
-
   .right-slot {
     display: flex;
     gap: 4px;
@@ -534,11 +479,6 @@
     }
 
     .action.composite {
-      width: 100%;
-      max-width: 100%;
-    }
-
-    .action.composite :global(.fitting-badges) {
       width: 100%;
       max-width: 100%;
     }

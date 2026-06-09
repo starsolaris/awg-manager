@@ -1,17 +1,21 @@
-import type { SingboxRouterOutbound, Subscription } from '$lib/types';
+import type { SingboxProxyGroup, SingboxRouterOutbound, Subscription } from '$lib/types';
 import type { OutboundGroup } from '$lib/components/routing/singboxRouter/outboundOptions';
 import { resolveMemberLabel } from '$lib/utils/memberLabel';
+import { resolveSubscriptionMemberTag } from '$lib/utils/subscriptionMember';
 import { outboundDisplay as compositeTitle } from './outboundLabel';
 
 export const COMPOSITE_OUTBOUND_TYPES = new Set(['selector', 'urltest', 'loadbalance']);
 
 export type CompositeOutboundType = 'selector' | 'urltest' | 'loadbalance';
 
-export interface CompositeMemberDisplay {
+export interface CompositeOutboundView {
 	compositeType: CompositeOutboundType;
 	groupTitle: string;
-	memberLabels: string[];
-	memberTitles: string[];
+	isSubscription: boolean;
+	activeMemberTag: string;
+	activeMemberLabel: string;
+	otherMemberTags: string[];
+	otherMemberLabels: string[];
 }
 
 function memberTagsFor(
@@ -25,56 +29,76 @@ function memberTagsFor(
 	return sub?.members?.map((m) => m.tag).filter(Boolean) ?? [];
 }
 
-function labelMembers(
-	members: string[],
-	subscriptions: Subscription[] | null | undefined,
-	outboundOptions: OutboundGroup[],
-): { labels: string[]; titles: string[] } {
-	const labels = members.map((tag) => resolveMemberLabel(tag, subscriptions, outboundOptions));
-	return { labels, titles: members };
-}
-
 function subscriptionCompositeType(sub: Subscription): CompositeOutboundType {
 	return sub.mode === 'urltest' ? 'urltest' : 'selector';
 }
 
+/** Активный участник: clash `now` → подписка activeMember → первый в списке. */
+export function resolveCompositeActiveMemberTag(
+	tag: string,
+	members: string[],
+	proxyGroups: SingboxProxyGroup[],
+	subscription?: Subscription | null,
+): string {
+	const clashNow = proxyGroups.find((g) => g.tag === tag)?.now;
+	if (clashNow && members.includes(clashNow)) return clashNow;
+	if (subscription) {
+		return resolveSubscriptionMemberTag(subscription, clashNow && members.includes(clashNow) ? clashNow : null);
+	}
+	return members[0] ?? '';
+}
+
 /**
- * Раскрывает composite outbound в список человекочитаемых меток участников
- * для простого режима (RuleCard). Возвращает null, если тег не composite.
+ * Composite для простого режима: один активный туннель + остальные в +N.
+ * Возвращает null, если тег не composite или нет участников.
  */
-export function resolveCompositeMemberDisplay(
+export function resolveCompositeOutboundView(
 	tag: string,
 	outbounds: SingboxRouterOutbound[],
 	outboundOptions: OutboundGroup[],
 	subscriptions: Subscription[] | null | undefined,
-): CompositeMemberDisplay | null {
+	proxyGroups: SingboxProxyGroup[] = [],
+): CompositeOutboundView | null {
 	const ob = outbounds.find((o) => o.tag === tag);
 
 	if (ob && !COMPOSITE_OUTBOUND_TYPES.has(ob.type)) return null;
 
+	const sub = subscriptions?.find((s) => s.selectorTag === tag);
+
 	if (ob && COMPOSITE_OUTBOUND_TYPES.has(ob.type)) {
 		const members = memberTagsFor(ob, subscriptions, tag);
 		if (members.length === 0) return null;
-		const { labels, titles } = labelMembers(members, subscriptions, outboundOptions);
+		const activeTag = resolveCompositeActiveMemberTag(tag, members, proxyGroups, sub);
+		const otherTags = members.filter((t) => t !== activeTag);
 		return {
 			compositeType: ob.type as CompositeOutboundType,
-			groupTitle: compositeTitle(ob, subscriptions).title,
-			memberLabels: labels,
-			memberTitles: titles,
+			groupTitle: sub?.label || compositeTitle(ob, subscriptions).title,
+			isSubscription: !!sub || ob.source === 'subscription',
+			activeMemberTag: activeTag,
+			activeMemberLabel: resolveMemberLabel(activeTag, subscriptions, outboundOptions),
+			otherMemberTags: otherTags,
+			otherMemberLabels: otherTags.map((t) => resolveMemberLabel(t, subscriptions, outboundOptions)),
 		};
 	}
 
-	const sub = subscriptions?.find((s) => s.selectorTag === tag);
 	if (!sub) return null;
 
 	const members = memberTagsFor(undefined, subscriptions, tag);
 	if (members.length === 0) return null;
 
-	const { labels, titles } = labelMembers(members, subscriptions, outboundOptions);
+	const activeTag = resolveCompositeActiveMemberTag(tag, members, proxyGroups, sub);
+	const otherTags = members.filter((t) => t !== activeTag);
+
 	return {
 		compositeType: subscriptionCompositeType(sub),
 		groupTitle: sub.label || tag,
-		memberLabels: labels,
-		memberTitles: titles,
+		isSubscription: true,
+		activeMemberTag: activeTag,
+		activeMemberLabel: resolveMemberLabel(activeTag, subscriptions, outboundOptions),
+		otherMemberTags: otherTags,
+		otherMemberLabels: otherTags.map((t) => resolveMemberLabel(t, subscriptions, outboundOptions)),
 	};
 }
+
+/** @deprecated используйте resolveCompositeOutboundView */
+export const resolveCompositeMemberDisplay = resolveCompositeOutboundView;
