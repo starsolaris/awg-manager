@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Modal from '$lib/components/ui/Modal.svelte';
+	import SingboxSettingsModal from './SingboxSettingsModal.svelte';
 	import { Button, Dropdown, ChipMultiSelect, type DropdownOption, type ChipOption } from '$lib/components/ui';
 	import type { SingboxRouterRule, SingboxRouterRuleSet } from '$lib/types';
 	import type { OutboundGroup } from './outboundOptions';
@@ -179,10 +179,9 @@
 	}
 </script>
 
-<Modal
-	open
-	onclose={onClose}
+<SingboxSettingsModal
 	title={matchersOnly ? 'Домены и адреса' : rule ? 'Редактировать правило' : 'Новое правило'}
+	onClose={onClose}
 	hasUnsavedChanges={() => isDirty}
 >
 	<div class="form">
@@ -275,117 +274,4 @@
 			Сохранить
 		</Button>
 	{/snippet}
-</Modal>
-
-<style>
-	.form {
-		display: grid;
-		gap: 0.6rem;
-		min-width: 0;
-	}
-	.section-label {
-		font-size: 0.7rem;
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-		color: var(--muted-text);
-		margin-bottom: 0.25rem;
-	}
-	.field {
-		display: grid;
-		gap: 0.25rem;
-	}
-	.lbl {
-		font-size: 0.75rem;
-		color: var(--muted-text);
-	}
-	.field-head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.5rem;
-	}
-	.count-chip {
-		font-size: 0.7rem;
-		color: var(--muted-text);
-		padding: 0.1rem 0.45rem;
-		border: 1px solid var(--border);
-		border-radius: 999px;
-		font-family: ui-monospace, monospace;
-		white-space: nowrap;
-	}
-	.hint {
-		font-size: 0.72rem;
-		color: var(--muted-text);
-		line-height: 1.4;
-		margin-top: 0.15rem;
-	}
-	.field textarea,
-	.field input {
-		background: var(--bg);
-		border: 1px solid var(--border);
-		padding: 0.4rem 0.6rem;
-		border-radius: 4px;
-		color: var(--text);
-		font-family: ui-monospace, monospace;
-		font-size: 0.85rem;
-		box-sizing: border-box;
-		width: 100%;
-		resize: vertical;
-	}
-	.action-section {
-		border-top: 1px solid var(--border);
-		padding-top: 0.75rem;
-		margin-top: 0.25rem;
-		display: grid;
-		gap: 0.5rem;
-	}
-	.segment {
-		display: inline-flex;
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		overflow: hidden;
-		width: fit-content;
-	}
-	.segment button {
-		background: transparent;
-		border: none;
-		padding: 0.4rem 0.9rem;
-		font-size: 0.85rem;
-		cursor: pointer;
-		color: var(--muted-text);
-	}
-	.segment button + button {
-		border-left: 1px solid var(--border);
-	}
-	.segment button.active {
-		background: var(--accent, #3b82f6);
-		color: var(--color-accent-contrast, #ffffff);
-		font-weight: 600;
-	}
-
-	@media (max-width: 640px) {
-		.segment {
-			display: grid;
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-			width: 100%;
-			border-radius: 0.375rem;
-		}
-
-		.segment button {
-			min-width: 0;
-			width: 100%;
-			min-height: 2.375rem;
-			padding: 0.5rem 0.625rem;
-			text-align: center;
-			white-space: nowrap;
-		}
-
-		.segment button + button {
-			border-left: 1px solid var(--border);
-		}
-	}
-	.error {
-		color: var(--danger, #dc2626);
-		font-size: 0.85rem;
-	}
-</style>
+</SingboxSettingsModal>

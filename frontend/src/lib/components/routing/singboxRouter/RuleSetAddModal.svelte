@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Modal from '$lib/components/ui/Modal.svelte';
+	import SingboxSettingsModal from './SingboxSettingsModal.svelte';
 	import { Button, Dropdown, SyntaxHighlightedTextarea, type DropdownOption } from '$lib/components/ui';
 	import { highlightJson } from '$lib/utils/shareEditorHighlight';
 	import { api } from '$lib/api/client';
@@ -418,7 +418,11 @@
 	}
 </script>
 
-<Modal open onclose={onClose} title={ruleSet ? 'Редактировать rule set' : 'Новый rule set'} hasUnsavedChanges={() => isDirty}>
+<SingboxSettingsModal
+	title={ruleSet ? 'Редактировать rule set' : 'Новый rule set'}
+	onClose={onClose}
+	hasUnsavedChanges={() => isDirty}
+>
 	<div class="form">
 		<div class="field">
 			<div class="lbl">Тип</div>
@@ -496,6 +500,7 @@
 						kind={datKind}
 						files={datFiles}
 						selected={selectedGeoTags}
+						compact
 						onToggle={toggleGeoTag}
 					/>
 				{/if}
@@ -541,7 +546,7 @@
 			</div>
 
 			{#if inlineMode === 'list'}
-				<div class="field">
+				<div class="field field-editor">
 					{#if isEditing && inlineLossyAnalysis.lossy}
 						<div class="parse-messages parse-messages-warning">
 							<div class="parse-messages-title">Потеря данных в режиме "Список"</div>
@@ -556,7 +561,7 @@
 					<InlineRuleListEditor bind:value={rulesList} />
 				</div>
 			{:else}
-				<label class="field">
+				<label class="field field-editor">
 					<div class="lbl">Правила (JSON-массив)</div>
 					<div class="rules-editor rules-json-editor">
 						<pre
@@ -599,29 +604,14 @@
 			Сохранить
 		</Button>
 	{/snippet}
-</Modal>
+</SingboxSettingsModal>
 
 <style>
-	.form {
-		display: grid;
-		gap: 0.6rem;
-		min-width: 0;
-	}
-	.field {
-		display: grid;
-		gap: 0.25rem;
-	}
-	.field.highlight {
-		padding: 0.6rem;
-		background: var(--bg);
-		border-left: 2px solid var(--accent, #3b82f6);
-		border-radius: 4px;
-	}
 	.dat-picker-field {
-		padding: 0.6rem;
-		background: var(--bg);
-		border: 1px solid var(--border);
-		border-radius: 6px;
+		padding: 0;
+		background: transparent;
+		border: none;
+		border-radius: 0;
 	}
 	.dat-picker-head {
 		display: flex;
@@ -643,7 +633,7 @@
 		border-radius: 4px;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border);
-		font-size: 0.78rem;
+		font-size: 0.72rem;
 		color: var(--muted-text);
 		cursor: pointer;
 		font-family: inherit;
@@ -658,33 +648,8 @@
 	}
 	.selected-geo span {
 		color: var(--muted-text);
-		font-size: 0.9rem;
-		line-height: 1;
-	}
-	.lbl {
-		font-size: 0.75rem;
-		color: var(--muted-text);
-	}
-	.hint {
-		font-size: 0.75rem;
-		color: var(--muted-text);
-		line-height: 1.4;
-		margin-top: 0.25rem;
-	}
-	.field input {
-		background: var(--bg);
-		border: 1px solid var(--border);
-		padding: 0.4rem 0.6rem;
-		border-radius: 4px;
-		color: var(--text);
-		font-family: ui-monospace, monospace;
 		font-size: 0.85rem;
-		width: 100%;
-		box-sizing: border-box;
-	}
-	.field input:disabled {
-		opacity: 0.7;
-		cursor: not-allowed;
+		line-height: 1;
 	}
 	.rules-json-editor {
 		background: var(--bg);
@@ -698,136 +663,65 @@
 	.rules-json-editor:focus-within {
 		border-color: var(--accent, #3b82f6);
 	}
-	.segment {
-		display: inline-flex;
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		overflow: hidden;
-		width: fit-content;
-	}
-	.segment button {
-		background: transparent;
-		border: none;
-		padding: 0.4rem 0.9rem;
-		font-size: 0.85rem;
-		cursor: pointer;
-		color: var(--muted-text);
-	}
-	.segment button + button {
-		border-left: 1px solid var(--border);
-	}
-	.segment button.active {
-		background: var(--accent, #3b82f6);
-		color: var(--color-accent-contrast, #ffffff);
-		font-weight: 600;
-	}
 
 	@media (max-width: 640px) {
-		.segment {
-			display: grid;
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-			width: 100%;
+		:global(.sbr-settings-form) .segment {
 			overflow: visible;
 		}
 
-		.segment button {
-			min-height: 2.25rem;
-			padding: 0.45rem 0.5rem;
-			text-align: center;
-		}
-
-		.segment button + button {
+		:global(.sbr-settings-form) .segment button + button {
 			border-left: none;
 		}
 
-		.segment button {
+		:global(.sbr-settings-form) .segment button {
 			border-left: 1px solid var(--border);
 			border-top: 1px solid var(--border);
 		}
 
-		.segment button:nth-child(-n + 2) {
+		:global(.sbr-settings-form) .segment button:nth-child(-n + 2) {
 			border-top: none;
 		}
 
-		.segment button:nth-child(2n + 1) {
+		:global(.sbr-settings-form) .segment button:nth-child(2n + 1) {
 			border-left: none;
 		}
 
-		.segment:not(.segment-type) button:last-child:nth-child(odd) {
+		:global(.sbr-settings-form) .segment:not(.segment-type) button:last-child:nth-child(odd) {
 			grid-column: 2 / 3;
 		}
 
-		.segment-type {
+		:global(.sbr-settings-form) .segment.segment-type {
 			grid-template-columns: repeat(6, minmax(0, 1fr));
 		}
 
-		.segment-type button {
+		:global(.sbr-settings-form) .segment.segment-type button {
 			grid-column: span 2;
 			min-width: 0;
 		}
 
-		.segment-type button:nth-child(4),
-		.segment-type button:nth-child(5) {
+		:global(.sbr-settings-form) .segment.segment-type button:nth-child(4),
+		:global(.sbr-settings-form) .segment.segment-type button:nth-child(5) {
 			grid-column: span 3;
 		}
 
-		.segment-type button:nth-child(3) {
+		:global(.sbr-settings-form) .segment.segment-type button:nth-child(3) {
 			border-left: 1px solid var(--border);
 			border-top: none;
 		}
 
-		.segment-type button:nth-child(4) {
+		:global(.sbr-settings-form) .segment.segment-type button:nth-child(4) {
 			border-left: none;
 			border-top: 1px solid var(--border);
 		}
 
-		.segment-type button:nth-child(5) {
+		:global(.sbr-settings-form) .segment.segment-type button:nth-child(5) {
 			border-left: 1px solid var(--border);
 			border-top: 1px solid var(--border);
 		}
 
-		.segment-type button:last-child:nth-child(odd) {
+		:global(.sbr-settings-form) .segment.segment-type button:last-child:nth-child(odd) {
 			grid-column: span 3;
 		}
-	}
-	.error {
-		color: var(--danger, #dc2626);
-		font-size: 0.85rem;
-	}
-	.parse-messages {
-		padding: 0.55rem 0.65rem;
-		border: 1px solid var(--border);
-		border-radius: 0.45rem;
-		background: var(--surface-1, rgba(255, 255, 255, 0.035));
-		font-size: 0.82rem;
-		line-height: 1.4;
-		max-height: min(12rem, 32vh);
-		overflow: auto;
-		overflow-wrap: anywhere;
-		word-break: break-word;
-		min-width: 0;
-	}
-
-	.parse-messages-title {
-		font-weight: 700;
-		margin-bottom: 0.35rem;
-	}
-
-	.parse-messages ul {
-		margin: 0;
-		padding-left: 1.1rem;
-		display: grid;
-		gap: 0.22rem;
-	}
-
-	.parse-messages li {
-		margin: 0;
-	}
-
-	.parse-messages-warning {
-		border-color: var(--color-warning, #d97706);
-		color: var(--color-warning, #d97706);
-		background: rgba(217, 119, 6, 0.08);
 	}
 	.rules-editor {
 		display: grid;

@@ -8,7 +8,8 @@
 		deviceProxyMissingTarget,
 	} from '$lib/stores/deviceproxy';
 	import { configFromInstance, mergeInstanceConfig, newDeviceProxyInstance } from '$lib/utils/deviceProxyInstance';
-	import { SideDrawer, Button } from '$lib/components/ui';
+	import { Button } from '$lib/components/ui';
+	import SingboxSettingsModal from '$lib/components/routing/singboxRouter/SingboxSettingsModal.svelte';
 	import ActiveTunnelCard from '$lib/components/deviceproxy/ActiveTunnelCard.svelte';
 	import SettingsCard from '$lib/components/deviceproxy/SettingsCard.svelte';
 	import DeviceProxyStatRow from '$lib/components/deviceproxy/DeviceProxyStatRow.svelte';
@@ -43,6 +44,8 @@
 
 	let choices = $state<ListenChoices | null>(null);
 	let settingsDrawerOpen = $state(false);
+	let settingsCardRef = $state<SettingsCard | null>(null);
+	let settingsSaving = $state(false);
 	let selectedInstanceId = $state<string>('default');
 	let runtimes = $state<RuntimeById>({});
 	let toggling = $state<ToggleById>({});
@@ -532,23 +535,41 @@
 	</div>
 
 	{#if selectedInstance}
-		<SideDrawer
+		<SingboxSettingsModal
 			open={settingsDrawerOpen}
 			onClose={() => (settingsDrawerOpen = false)}
 			title={`Настройки: ${selectedInstance.name || selectedInstance.id}`}
-			width={560}
+			size="md"
 		>
 			<SettingsCard
+				bind:this={settingsCardRef}
+				bind:saving={settingsSaving}
+				embedded
+				hideFooter
 				config={configFromInstance(selectedInstance)}
 				{outbounds}
 				{bridgeInterfaces}
-				title={`Настройки: ${selectedInstance.name || selectedInstance.id}`}
-				description="Эти значения относятся только к выбранному proxy instance."
 				onSaveConfig={saveSelectedConfig}
 				onSaved={() => {}}
 				onCancel={() => (settingsDrawerOpen = false)}
 			/>
-		</SideDrawer>
+
+			{#snippet actions()}
+				<Button variant="ghost" size="md" onclick={() => (settingsDrawerOpen = false)} disabled={settingsSaving} type="button">
+					Отмена
+				</Button>
+				<Button
+					variant="primary"
+					size="md"
+					onclick={() => void settingsCardRef?.save()}
+					disabled={settingsSaving}
+					loading={settingsSaving}
+					type="button"
+				>
+					Сохранить
+				</Button>
+			{/snippet}
+		</SingboxSettingsModal>
 	{/if}
 {/if}
 

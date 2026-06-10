@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { Button, Dropdown, SideDrawer, type DropdownOption } from '$lib/components/ui';
+	import { Button, Dropdown, type DropdownOption } from '$lib/components/ui';
+	import SingboxSettingsModal from './SingboxSettingsModal.svelte';
 	import type {
 		SingboxRouterDNSServer,
 		SingboxRouterDNSType,
@@ -166,12 +167,11 @@
 	}
 </script>
 
-<SideDrawer
-	open
-	onClose={onClose}
+<SingboxSettingsModal
 	title={server ? 'Редактировать DNS сервер' : 'Новый DNS сервер'}
-	width={620}
-	footer={drawerFooter}
+	onClose={onClose}
+	size="lg"
+	hasUnsavedChanges={() => isDirty}
 >
 	<div class="form">
 		<div class="fields-grid">
@@ -210,7 +210,7 @@
 		</div>
 
 		{#if type !== 'local'}
-			<section class="form-section">
+			<section class="form-section form-section-divided">
 				<div class="section-label">Маршрутизация</div>
 
 				<label class="field">
@@ -266,121 +266,11 @@
 
 		{#if error}<div class="error">{error}</div>{/if}
 	</div>
-</SideDrawer>
 
-{#snippet drawerFooter()}
-	<Button variant="ghost" size="md" onclick={onClose} type="button">Отмена</Button>
-	<Button variant="primary" size="md" onclick={save} disabled={busy} loading={busy} type="button">
-		Сохранить
-	</Button>
-{/snippet}
-
-<style>
-	.form {
-		display: grid;
-		gap: 0.875rem;
-		min-width: 0;
-	}
-	.fields-grid {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 0.5rem 0.6rem;
-	}
-	.span-full {
-		grid-column: 1 / -1;
-	}
-	.form-section {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		padding-top: 0.5rem;
-		border-top: 1px solid var(--border);
-		min-width: 0;
-	}
-	.section-label {
-		font-size: 0.7rem;
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-		color: var(--muted-text);
-		margin: 0;
-	}
-	.resolver-fields {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 0.5rem;
-	}
-	@media (max-width: 520px) {
-		.fields-grid,
-		.resolver-fields {
-			grid-template-columns: 1fr;
-		}
-		.span-full {
-			grid-column: auto;
-		}
-	}
-	.field {
-		display: grid;
-		gap: 0.25rem;
-	}
-	.lbl {
-		font-size: 0.75rem;
-		color: var(--muted-text);
-	}
-	.req {
-		color: var(--danger, #dc2626);
-	}
-	.field input {
-		background: var(--bg);
-		border: 1px solid var(--border);
-		padding: 0.4rem 0.6rem;
-		border-radius: 4px;
-		color: var(--text);
-		font-family: ui-monospace, monospace;
-		font-size: 0.85rem;
-		box-sizing: border-box;
-		width: 100%;
-	}
-	.hint {
-		font-size: 0.75rem;
-		color: var(--muted-text);
-		line-height: 1.4;
-	}
-	.hint code {
-		background: var(--bg);
-		padding: 0.05rem 0.25rem;
-		border-radius: 2px;
-		font-family: ui-monospace, monospace;
-	}
-	.toggle {
-		display: flex;
-		align-items: flex-start;
-		gap: 0.5rem;
-		font-size: 0.85rem;
-		color: var(--text);
-		cursor: pointer;
-		line-height: 1.4;
-	}
-	.toggle input {
-		margin-top: 0.15rem;
-		flex-shrink: 0;
-	}
-	.warn {
-		padding: 0.5rem 0.7rem;
-		background: rgba(224, 175, 104, 0.12);
-		border-left: 3px solid var(--warning, #e0af68);
-		border-radius: 3px;
-		font-size: 0.8rem;
-		color: var(--muted-text);
-		line-height: 1.4;
-	}
-	.warn code {
-		background: var(--bg);
-		padding: 0.05rem 0.25rem;
-		border-radius: 2px;
-		font-family: ui-monospace, monospace;
-	}
-	.error {
-		color: var(--danger, #dc2626);
-		font-size: 0.85rem;
-	}
-</style>
+	{#snippet actions()}
+		<Button variant="ghost" size="md" onclick={onClose} type="button">Отмена</Button>
+		<Button variant="primary" size="md" onclick={save} disabled={busy} loading={busy} type="button">
+			Сохранить
+		</Button>
+	{/snippet}
+</SingboxSettingsModal>

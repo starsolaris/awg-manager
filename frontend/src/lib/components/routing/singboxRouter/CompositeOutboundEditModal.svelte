@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { Button, Dropdown, SideDrawer, type DropdownOption } from '$lib/components/ui';
+	import { Button, Dropdown, SegmentedControl, type DropdownOption } from '$lib/components/ui';
+	import type { SegmentedOption } from '$lib/components/ui/segmentedControl';
+	import SingboxSettingsModal from './SingboxSettingsModal.svelte';
 	import type { SingboxRouterOutbound, SingboxRouterWANInterface } from '$lib/types';
 	import type { OutboundGroup } from './outboundOptions';
 	import { subscriptionsStore } from '$lib/stores/subscriptions';
@@ -195,6 +197,14 @@
 		}
 	}
 
+	type OutboundType = 'urltest' | 'selector' | 'direct';
+
+	const typeOptions = $derived<SegmentedOption<OutboundType>[]>([
+		{ value: 'urltest', label: 'URLTest', disabled: !!outbound && outbound.type === 'direct' },
+		{ value: 'selector', label: 'Selector', disabled: !!outbound && outbound.type === 'direct' },
+		{ value: 'direct', label: 'Интерфейс', disabled: !!outbound && outbound.type !== 'direct' },
+	]);
+
 	const typeDescription = $derived(
 		type === 'direct'
 			? 'Прямое соединение через выбранный интерфейс (IPSec/IKEv2/др. VPN). Трафик правила пойдёт через этот интерфейс.'
@@ -204,21 +214,23 @@
 	);
 </script>
 
-<SideDrawer
-	open
-	onClose={onClose}
+<SingboxSettingsModal
 	title={outbound ? 'Редактировать outbound' : 'Новый outbound'}
-	width={620}
-	footer={drawerFooter}
+	onClose={onClose}
+	size="lg"
+	hasUnsavedChanges={() => isDirty}
 >
 	<div class="form">
-		<div class="section-label">Тип</div>
-		<div class="segment">
-			<button class:active={type === 'urltest'} onclick={() => (type = 'urltest')} type="button" disabled={!!outbound && outbound.type === 'direct'}>URLTest</button>
-			<button class:active={type === 'selector'} onclick={() => (type = 'selector')} type="button" disabled={!!outbound && outbound.type === 'direct'}>Selector</button>
-			<button class:active={type === 'direct'} onclick={() => (type = 'direct')} type="button" disabled={!!outbound && outbound.type !== 'direct'}>Интерфейс</button>
+		<div class="field type-field">
+			<div class="lbl">Тип</div>
+			<SegmentedControl
+				value={type}
+				options={typeOptions}
+				ariaLabel="Тип outbound"
+				onchange={(next) => (type = next)}
+			/>
+			<div class="type-hint">{typeDescription}</div>
 		</div>
-		<div class="type-hint">{typeDescription}</div>
 
 		<label class="field">
 			<div class="lbl">Tag (имя)</div>
@@ -307,174 +319,22 @@
 
 		{#if error}<div class="error">{error}</div>{/if}
 	</div>
-</SideDrawer>
 
-{#snippet drawerFooter()}
-	<Button variant="ghost" size="md" onclick={onClose} type="button">Отмена</Button>
-	<Button variant="primary" size="md" onclick={save} disabled={busy} loading={busy} type="button">
-		Сохранить
-	</Button>
-{/snippet}
+	{#snippet actions()}
+		<Button variant="ghost" size="md" onclick={onClose} type="button">Отмена</Button>
+		<Button variant="primary" size="md" onclick={save} disabled={busy} loading={busy} type="button">
+			Сохранить
+		</Button>
+	{/snippet}
+</SingboxSettingsModal>
 
 <style>
-	.form {
-		display: grid;
-		gap: 0.6rem;
-		min-width: 0;
-	}
-	.section-label {
-		font-size: 0.7rem;
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-		color: var(--muted-text);
-	}
-	.type-hint {
-		font-size: 0.75rem;
-		color: var(--muted-text);
-		background: var(--bg);
-		padding: 0.5rem 0.75rem;
-		border-radius: 4px;
-		line-height: 1.5;
-	}
-
-	.tag-warn {
-		margin-top: 0.35rem;
-		font-size: 0.75rem;
-		line-height: 1.4;
-		color: var(--warning, #d97706);
-	}
-	.field {
-		display: grid;
-		gap: 0.25rem;
-	}
-	.lbl {
-		font-size: 0.75rem;
-		color: var(--muted-text);
-	}
-	.field input {
-		background: var(--bg);
-		border: 1px solid var(--border);
-		padding: 0.4rem 0.6rem;
-		border-radius: 4px;
-		color: var(--text);
-		font-family: ui-monospace, monospace;
-		font-size: 0.85rem;
+	.type-field :global(.segmented-control) {
 		width: 100%;
-		box-sizing: border-box;
 	}
-	.segment {
-		display: flex;
-		width: 100%;
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		overflow: hidden;
-	}
-	.segment button {
-		flex: 1 1 0;
+
+	.type-field :global(.segmented-control-btn) {
+		flex: 1;
 		min-width: 0;
-		background: transparent;
-		border: none;
-		padding: 0.4rem 0.9rem;
-		font-size: 0.85rem;
-		cursor: pointer;
-		color: var(--muted-text);
-		text-align: center;
-		white-space: nowrap;
-	}
-	.segment button + button {
-		border-left: 1px solid var(--border);
-	}
-	.segment button.active {
-		background: var(--accent, #3b82f6);
-		color: var(--color-accent-contrast, #ffffff);
-		font-weight: 600;
-	}
-	.row2 {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 0.5rem;
-	}
-	.error {
-		color: var(--danger, #dc2626);
-		font-size: 0.85rem;
-	}
-
-	.member-chips {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.35rem;
-		padding: 0.4rem 0.5rem;
-		min-height: 2.1rem;
-		background: var(--bg);
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		align-items: center;
-	}
-	.member-chips.empty {
-		justify-content: flex-start;
-	}
-	.chips-placeholder {
-		font-size: 0.78rem;
-		color: var(--muted-text);
-		font-style: italic;
-	}
-	.member-chip {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.3rem;
-		background: var(--color-accent-tint, var(--bg));
-		color: var(--color-accent, var(--text));
-		border: 1px solid var(--color-accent-border, var(--border));
-		border-radius: 999px;
-		padding: 0.15rem 0.25rem 0.15rem 0.6rem;
-		font-family: ui-monospace, monospace;
-		font-size: 0.78rem;
-		line-height: 1.3;
-		max-width: 100%;
-	}
-	.member-chip-label {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.member-chip-remove {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.1rem;
-		height: 1.1rem;
-		padding: 0;
-		background: transparent;
-		border: none;
-		border-radius: 999px;
-		color: inherit;
-		opacity: 0.7;
-		cursor: pointer;
-		transition: opacity var(--t-fast, 120ms) ease, background var(--t-fast, 120ms) ease;
-	}
-	.member-chip-remove:hover {
-		opacity: 1;
-		background: rgba(0, 0, 0, 0.12);
-	}
-	.member-chip-remove svg {
-		width: 12px;
-		height: 12px;
-	}
-
-	@media (max-width: 640px) {
-		.segment {
-			display: grid;
-			grid-template-columns: repeat(3, minmax(0, 1fr));
-			width: 100%;
-		}
-		.segment button {
-			width: 100%;
-			min-width: 0;
-			padding: 0.5rem 0.35rem;
-			font-size: 0.78rem;
-		}
-		.row2 {
-			grid-template-columns: minmax(0, 1fr);
-		}
 	}
 </style>

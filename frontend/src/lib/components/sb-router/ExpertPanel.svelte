@@ -21,7 +21,7 @@
   import { singboxTunnels } from '$lib/stores/singbox';
   import { notifications } from '$lib/stores/notifications';
   import { api } from '$lib/api/client';
-  import { computeRuleSetUsage } from '$lib/components/routing/singboxRouter';
+  import { computeRuleSetUsage, DNSGlobalsEditModal } from '$lib/components/routing/singboxRouter';
   import type { OutboundGroup } from '$lib/components/routing/singboxRouter/outboundOptions';
   import type {
     SingboxRouterRule,
@@ -49,7 +49,7 @@
   import DNSServerEditModal from '$lib/components/routing/singboxRouter/DNSServerEditModal.svelte';
   import DNSRuleEditModal from '$lib/components/routing/singboxRouter/DNSRuleEditModal.svelte';
   import { DNSRewritesList } from '$lib/components/routing/singboxRouter';
-  import { ConfirmModal, Dropdown, SideDrawer, Button, type DropdownOption } from '$lib/components/ui';
+  import { ConfirmModal, Dropdown, type DropdownOption } from '$lib/components/ui';
 
   // Store subscriptions
   const storeStatus = singboxRouterStore.status;
@@ -63,14 +63,6 @@
   const storeOptions = singboxRouterStore.options;
 
   // ── Globals (route-final + DNS final/strategy) ──────────────────────
-  const STRATEGY_OPTIONS: DropdownOption<SingboxRouterDNSStrategy>[] = [
-    { value: '', label: '— default —' },
-    { value: 'ipv4_only', label: 'ipv4_only' },
-    { value: 'ipv6_only', label: 'ipv6_only' },
-    { value: 'prefer_ipv4', label: 'prefer_ipv4' },
-    { value: 'prefer_ipv6', label: 'prefer_ipv6' },
-  ];
-
   // route-final: direct + все outbounds, кроме группы «Специальные»
   const routeFinalOptions = $derived<DropdownOption[]>([
     { value: 'direct', label: 'direct (мимо VPN)' },
@@ -79,31 +71,15 @@
       .flatMap((g) => g.items.map((i) => ({ value: i.value, label: i.label, group: g.group }))),
   ]);
 
-  // DNS-final: серверы из стора
-  const dnsFinalOptions = $derived<DropdownOption[]>([
-    { value: '', label: '— не задан —' },
-    ...$storeDnsServers.map((s) => ({ value: s.tag, label: s.tag })),
-  ]);
-
   let draftRouteFinal = $state('direct');
-  let draftDnsFinal = $state('');
-  let draftDnsStrategy = $state<SingboxRouterDNSStrategy>('');
   let routeFinalBusy = $state(false);
-  let dnsGlobalsBusy = $state(false);
 
   // draft синхронизируется со стором
   $effect(() => {
     draftRouteFinal = $storeStatus?.final || 'direct';
   });
-  $effect(() => {
-    draftDnsFinal = $storeDnsGlobals.final;
-    draftDnsStrategy = $storeDnsGlobals.strategy;
-  });
 
   const routeFinalDirty = $derived(draftRouteFinal !== ($storeStatus?.final || 'direct'));
-  const dnsGlobalsDirty = $derived(
-    draftDnsFinal !== $storeDnsGlobals.final || draftDnsStrategy !== $storeDnsGlobals.strategy,
-  );
 
   async function saveRouteFinal() {
     if (!routeFinalDirty || routeFinalBusy) return;
@@ -118,32 +94,8 @@
     }
   }
 
-  async function saveDnsGlobals() {
-    if (!dnsGlobalsDirty || dnsGlobalsBusy) return;
-    dnsGlobalsBusy = true;
-    try {
-      await api.singboxRouterPutDNSGlobals({ final: draftDnsFinal, strategy: draftDnsStrategy });
-      await singboxRouterStore.loadAll();
-    } catch (e) {
-      notifications.error(e instanceof Error ? e.message : String(e));
-    } finally {
-      dnsGlobalsBusy = false;
-    }
-  }
-
-  function resetDnsGlobalsDraft() {
-    draftDnsFinal = $storeDnsGlobals.final;
-    draftDnsStrategy = $storeDnsGlobals.strategy;
-  }
-
-  function closeDnsGlobalsDrawer() {
-    resetDnsGlobalsDraft();
-    dnsGlobalsDrawerOpen = false;
-  }
-
-  function openDnsGlobalsDrawer() {
-    resetDnsGlobalsDraft();
-    dnsGlobalsDrawerOpen = true;
+  function openDnsGlobalsModal() {
+    dnsGlobalsModalOpen = true;
   }
 
   let activeProxyCount = $state<number | null>(null);
@@ -186,7 +138,7 @@
   let dnsServerAddOpen = $state(false);
   let dnsRuleEditIdx = $state<number | null>(null);
   let dnsRuleAddOpen = $state(false);
-  let dnsGlobalsDrawerOpen = $state(false);
+  let dnsGlobalsModalOpen = $state(false);
 
   let inboundDrawerInstance = $state<DeviceProxyInstance | null>(null);
   let inboundDrawerOpen = $state(false);
@@ -492,22 +444,10 @@
     await singboxRouterStore.loadAll();
   }
 
-  async function saveDnsGlobalsAndClose() {
-    if (!dnsGlobalsDirty || dnsGlobalsBusy) return;
-
-    dnsGlobalsBusy = true;
-    try {
-      await api.singboxRouterPutDNSGlobals({
-        final: draftDnsFinal,
-        strategy: draftDnsStrategy,
-      });
-      await singboxRouterStore.loadAll();
-      dnsGlobalsDrawerOpen = false;
-    } catch (e) {
-      notifications.error(e instanceof Error ? e.message : String(e));
-    } finally {
-      dnsGlobalsBusy = false;
-    }
+  async function handleDnsGlobalsSave(globals: { final: string; strategy: SingboxRouterDNSStrategy }) {
+    await api.singboxRouterPutDNSGlobals(globals);
+    dnsGlobalsModalOpen = false;
+    await singboxRouterStore.loadAll();
   }
 </script>
 
@@ -596,7 +536,7 @@
         <button
           type="button"
           class="globals-summary"
-          onclick={openDnsGlobalsDrawer}
+          onclick={openDnsGlobalsModal}
         >
           <div>
             <span class="gb-label">DNS по умолчанию</span>
@@ -760,50 +700,15 @@
   />
 {/if}
 
-{#if dnsGlobalsDrawerOpen}
-  <SideDrawer
-    open
-    onClose={closeDnsGlobalsDrawer}
-    title="DNS по умолчанию"
-    width={520}
-    footer={dnsGlobalsFooter}
-  >
-    <div class="dns-globals-drawer">
-      <label class="gb-field">
-        <span class="gb-flabel">Final-сервер</span>
-        <Dropdown
-          bind:value={draftDnsFinal}
-          options={dnsFinalOptions}
-          disabled={$storeDnsServers.length === 0}
-          fullWidth
-        />
-        <span class="gb-hint">Сервер по умолчанию для запросов, не попавших ни под одно правило.</span>
-      </label>
-
-      <label class="gb-field">
-        <span class="gb-flabel">Стратегия</span>
-        <Dropdown bind:value={draftDnsStrategy} options={STRATEGY_OPTIONS} fullWidth />
-        <span class="gb-hint">Для роутера без IPv6 обычно prefer_ipv4 или ipv4_only.</span>
-      </label>
-    </div>
-  </SideDrawer>
+{#if dnsGlobalsModalOpen}
+  <DNSGlobalsEditModal
+    servers={$storeDnsServers}
+    final={$storeDnsGlobals.final}
+    strategy={$storeDnsGlobals.strategy}
+    onClose={() => (dnsGlobalsModalOpen = false)}
+    onSave={handleDnsGlobalsSave}
+  />
 {/if}
-
-{#snippet dnsGlobalsFooter()}
-  <Button variant="ghost" size="md" onclick={closeDnsGlobalsDrawer} type="button">
-    Отмена
-  </Button>
-  <Button
-    variant="primary"
-    size="md"
-    onclick={saveDnsGlobalsAndClose}
-    disabled={dnsGlobalsBusy || !dnsGlobalsDirty}
-    loading={dnsGlobalsBusy}
-    type="button"
-  >
-    Сохранить
-  </Button>
-{/snippet}
 
 {#if inboundDrawerInstance}
   <InboundSettingsDrawer
@@ -891,32 +796,6 @@
     color: var(--accent);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-  }
-  .gb-field {
-    display: grid;
-    grid-template-columns: 84px 1fr;
-    align-items: center;
-    gap: 8px;
-  }
-  .gb-flabel {
-    font-size: 11px;
-    color: var(--text-muted);
-  }
-  .dns-globals-drawer {
-    display: grid;
-    gap: 0.875rem;
-    min-width: 0;
-  }
-  .dns-globals-drawer .gb-field {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 0.35rem;
-    align-items: start;
-  }
-  .gb-hint {
-    font-size: 0.75rem;
-    line-height: 1.35;
-    color: var(--text-muted);
   }
   .main-grid {
     display: grid;
