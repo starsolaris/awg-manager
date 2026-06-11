@@ -30,6 +30,7 @@
   import { syncTunnelDnsRule } from './emptyStateActions';
   import { pluralize, RULE_WORDS } from '$lib/utils/pluralize';
   import { displayRuleSetTag } from '$lib/utils/singboxInlineRules';
+  import { findScrollContainer } from '$lib/utils/findScrollContainer';
   import type { RuleCardData } from './types';
 
   const rules = singboxRouterStore.rules;
@@ -197,12 +198,15 @@
 
   function requestRulesetEdit(tag: string) {
     cancelDrag();
-    const rs = $ruleSets.find((r) => r.tag === tag);
+    // Чип несёт display-тег (без -srs); если inline-база удалена, а компаньон
+    // ещё не вычищен, в $ruleSets остался только тег с суффиксом — ищем по нему.
+    const rs = $ruleSets.find((r) => r.tag === tag)
+      ?? $ruleSets.find((r) => !!r.tag && displayRuleSetTag(r.tag) === tag);
     if (!rs) {
       notifications.error(`Набор «${tag}» не найден в конфигурации`);
       return;
     }
-    rsEditTag = tag;
+    rsEditTag = rs.tag;
   }
 
   async function handleRsEditSave(rs: SingboxRouterRuleSet) {
@@ -275,21 +279,6 @@
     };
   }
 
-  function findScrollContainer(start: HTMLElement | null): HTMLElement | null {
-    let el = start?.parentElement ?? null;
-    while (el) {
-      const { overflowY } = getComputedStyle(el);
-      if (
-        (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay')
-        && el.scrollHeight > el.clientHeight + 1
-      ) {
-        return el;
-      }
-      el = el.parentElement;
-    }
-    return null;
-  }
-
   function canScrollWindow(): boolean {
     if (typeof document === 'undefined' || typeof window === 'undefined') return false;
     return document.documentElement.scrollHeight > window.innerHeight + 1;
@@ -353,10 +342,16 @@
   }
 
   function scheduleDropSkeleton() {
-    dropExpanded = false;
-    clearDropSkeletonTimer();
     const target = targetDropAt(insertionIndex);
-    if (!dragState?.started || target === null || target !== dropAt) return;
+    if (!dragState?.started || target === null || target !== dropAt) {
+      dropExpanded = false;
+      clearDropSkeletonTimer();
+      return;
+    }
+    // Цель не менялась: раскрытый скелетон не схлопываем (раскрытие сдвигает
+    // геометрию → insertionIndex меняется → безусловный сброс рушил только что
+    // показанный скелетон), идущий таймер не перезапускаем.
+    if (dropExpanded || dropSkeletonTimer !== null) return;
     dropSkeletonTimer = setTimeout(() => {
       if (dragState?.started && targetDropAt(insertionIndex) === dropAt && dropAt !== null) {
         dropExpanded = true;
@@ -677,6 +672,7 @@
       dropCommitPending = true;
       detachDragInteraction();
       requestAnimationFrame(() => {
+        if (!dropCommitPending) return;
         dropExpanded = true;
         dropCommitTimer = setTimeout(async () => {
           dropCommitTimer = null;
