@@ -121,6 +121,16 @@
 	border-color: color-mix(in srgb, #8ab4f8 32%, transparent);
 }
 
+.tone-chip.tone-invalid,
+.tone-icon.tone-invalid {
+	color: var(--error);
+}
+
+.tone-chip.tone-invalid {
+	background: rgba(181, 101, 119, 0.14);
+	border-color: rgba(181, 101, 119, 0.45);
+}
+
 .tone-chip.tone-system,
 .tone-icon.tone-system {
 	color: var(--text-muted);

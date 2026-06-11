@@ -25,6 +25,7 @@
     `tone-chip ${toneClass(tone)}${size === 'compact' ? ' tone-chip-compact' : ''}`,
   );
   let iconSize = $derived(size === 'compact' ? 10 : 14);
+  let title = $derived(outbound.invalidHint ?? (outbound.kind === 'unknown' ? 'Outbound не найден в конфиге' : undefined));
 </script>
 
 {#if outbound.kind === 'block'}
@@ -32,10 +33,19 @@
     <OutboundToneIcon {tone} kind={outbound.kind} size={iconSize} />
     <span>Заблокировать</span>
   </div>
-{:else if outbound.kind === 'direct'}
+{:else if outbound.kind === 'direct' && tone !== 'invalid'}
   <div class={cls}>
     <OutboundToneIcon {tone} kind={outbound.kind} size={iconSize} />
     <span>Напрямую</span>
+  </div>
+{:else if tone === 'invalid'}
+  <div class={cls} title={title}>
+    <OutboundToneIcon {tone} kind={outbound.kind} size={iconSize} />
+    <OutboundChipLabel
+      label={outbound.label}
+      metaSuffix={outbound.metaSuffix}
+      title={outboundDisplayTitle(outbound)}
+    />
   </div>
 {:else if outbound.kind === 'via-route'}
   <div class={cls} title="DNS маршрутизируется по таблице route">

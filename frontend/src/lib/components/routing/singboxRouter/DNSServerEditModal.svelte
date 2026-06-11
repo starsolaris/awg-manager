@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Button, Dropdown, type DropdownOption } from '$lib/components/ui';
+	import { OctagonAlert } from 'lucide-svelte';
 	import SingboxSettingsModal from './SingboxSettingsModal.svelte';
 	import type {
 		SingboxRouterDNSServer,
@@ -7,6 +8,13 @@
 		SingboxRouterDNSStrategy,
 	} from '$lib/types';
 	import type { OutboundGroup } from './outboundOptions';
+	import {
+		DNS_DIRECT_SERVER_TAG,
+		getDnsDirectLegacyDetour,
+		normalizeDnsServerDetour,
+		sanitizeDnsServerForApi,
+	} from '$lib/utils/dnsServerDetour';
+	import { dnsServerDetourDisplay } from '$lib/components/sb-router/dnsServerDetourDisplay';
 
 	interface Props {
 		server?: SingboxRouterDNSServer;
@@ -35,13 +43,32 @@
 	];
 
 	const detourOptions = $derived<DropdownOption[]>([
-		{ value: '', label: '— через route (по умолчанию) —' },
+		{ value: '', label: 'Напрямую' },
 		...outboundOptions.flatMap((g) =>
 			g.items
-				.filter((i) => server != null || i.value !== 'direct')
+				.filter((i) => i.value !== 'direct')
 				.map((i) => ({ value: i.value, label: i.label, group: g.group })),
 		),
 	]);
+
+	const dnsDirectDetourOptions = $derived<DropdownOption[]>([
+		{ value: '', label: 'Напрямую' },
+	]);
+
+	const isManagedDnsDirect = $derived(tag.trim() === DNS_DIRECT_SERVER_TAG);
+
+	const legacyDnsDirectDetour = $derived(server ? getDnsDirectLegacyDetour(server) : null);
+
+	const legacyDnsDirectDisplay = $derived.by(() => {
+		if (!server || !legacyDnsDirectDetour) return null;
+		return dnsServerDetourDisplay(server, [], outboundOptions);
+	});
+
+	const dnsDirectLegacyDetourOptions = $derived<DropdownOption[]>(
+		legacyDnsDirectDetour && legacyDnsDirectDisplay
+			? [{ value: legacyDnsDirectDetour, label: legacyDnsDirectDisplay.label }]
+			: dnsDirectDetourOptions,
+	);
 
 	// svelte-ignore state_referenced_locally
 	let tag = $state(server?.tag ?? '');
@@ -54,7 +81,11 @@
 	// svelte-ignore state_referenced_locally
 	let path = $state(server?.path ?? '');
 	// svelte-ignore state_referenced_locally
-	let detour = $state(server?.detour ?? '');
+	let detour = $state(
+		server?.tag === DNS_DIRECT_SERVER_TAG
+			? ''
+			: (normalizeDnsServerDetour(server?.detour) ?? ''),
+	);
 	// svelte-ignore state_referenced_locally
 	let strategy = $state<SingboxRouterDNSStrategy>(server?.domain_strategy ?? '');
 	// svelte-ignore state_referenced_locally
@@ -87,7 +118,10 @@
 			initialServerAddr = server.server;
 			initialServerPort = server.server_port ?? '';
 			initialPath = server.path ?? '';
-			initialDetour = server.detour ?? '';
+			initialDetour =
+				server.tag === DNS_DIRECT_SERVER_TAG
+					? ''
+					: (normalizeDnsServerDetour(server.detour) ?? '');
 			initialStrategy = server.domain_strategy ?? '';
 			initialResolverEnabled = server.domain_resolver != null;
 			initialResolverServer = server.domain_resolver?.server ?? '';
@@ -108,12 +142,13 @@
 
 	const isDirty = $derived.by(() => {
 		return (
+			!!legacyDnsDirectDetour ||
 			tag !== initialTag ||
 			type !== initialType ||
 			serverAddr !== initialServerAddr ||
 			serverPort !== initialServerPort ||
 			path !== initialPath ||
-			detour !== initialDetour ||
+			(detour !== initialDetour && !isManagedDnsDirect) ||
 			strategy !== initialStrategy ||
 			resolverEnabled !== initialResolverEnabled ||
 			resolverServer !== initialResolverServer ||
@@ -154,11 +189,15 @@
 				}
 			}
 			if (type !== 'local') {
-				if (detour) built.detour = detour;
 				if (strategy) built.domain_strategy = strategy;
 			}
 
-			await onSave(built);
+			const payload =
+				type === 'local'
+					? built
+					: sanitizeDnsServerForApi({ ...built, detour: detour || undefined });
+
+			await onSave(payload);
 		} catch (e) {
 			error = (e as Error).message;
 		} finally {
@@ -213,19 +252,44 @@
 			<section class="form-section form-section-divided">
 				<div class="section-label">Маршрутизация</div>
 
-				<label class="field">
-					<div class="lbl">Detour (outbound)</div>
-					<Dropdown bind:value={detour} options={detourOptions} fullWidth />
-					<div class="hint">
-						{#if server}
-							Через какой outbound сам сервер отправляет запросы. <code>direct</code> — через провайдера,
-							выбранный туннель — через VPN (шифрованный DNS без утечек).
+				{#if isManagedDnsDirect}
+					<label class="field">
+						<div class="lbl">Detour (outbound)</div>
+						<div class="detour-legacy-wrap" class:detour-legacy-invalid={!!legacyDnsDirectDetour}>
+							{#if legacyDnsDirectDetour}
+								<OctagonAlert size={16} strokeWidth={2} aria-hidden={true} class="detour-legacy-icon" />
+							{/if}
+							<div class="detour-legacy-dropdown">
+								<Dropdown
+									value={legacyDnsDirectDetour ?? ''}
+									options={dnsDirectLegacyDetourOptions}
+									disabled
+									fullWidth
+								/>
+							</div>
+						</div>
+						{#if legacyDnsDirectDetour}
+							<div class="warn">
+								Сейчас в конфиге указан недопустимый detour. Должно быть «Напрямую» — будет
+								исправлено при сохранении.
+							</div>
 						{:else}
-							Через какой outbound сам сервер отправляет запросы.
-							Выбранный туннель — через VPN (шифрованный DNS без утечек).
+							<div class="hint">
+								Final DNS — запросы к резолверу идут <strong>напрямую</strong> (WAN). Ключ
+								<code>detour</code> в конфиг не пишется.
+							</div>
 						{/if}
-					</div>
-				</label>
+					</label>
+				{:else}
+					<label class="field">
+						<div class="lbl">Detour (outbound)</div>
+						<Dropdown bind:value={detour} options={detourOptions} fullWidth />
+						<div class="hint">
+							Через какой outbound DNS-сервер достучится до IP резолвера. «Напрямую» — с роутера
+							(WAN), ключ <code>detour</code> в конфиг не пишется.
+						</div>
+					</label>
+				{/if}
 
 				<label class="field">
 					<div class="lbl">Стратегия (IPv4/IPv6)</div>

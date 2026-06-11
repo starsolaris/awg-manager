@@ -51,6 +51,8 @@ export interface OutboundDisplay {
   kind: OutboundKind;
   /** Цветовая категория бейджа (если не задан — из kind) */
   tone?: import('./outboundTileTone').OutboundTileTone;
+  /** Подсказка для invalid/warning chip */
+  invalidHint?: string;
   /** Тип composite (selector / urltest / loadbalance) */
   compositeType?: 'selector' | 'urltest' | 'loadbalance';
   /** Активный участник composite (clash now / selector / urltest) */

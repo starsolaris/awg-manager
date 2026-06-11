@@ -1889,7 +1889,45 @@ const mockWANInterfaces = [
 	{ name: 'usb0', id: 'UsbModem0', label: 'Резервный 4G', up: true, priority: 500000 },
 ];
 let mockBoundDevices = new Set();
+function scrubMockDnsServerStored(server) {
+	const next = { ...server };
+	const detour = typeof next.detour === 'string' ? next.detour.trim() : '';
+	delete next.detour;
+	if (detour && detour !== 'direct') {
+		next.detour = detour;
+	}
+	return next;
+}
+
+/** Write path — mirrors backend scrubDNSServerDetourForSingbox. */
+function sanitizeMockDnsServerForWrite(server) {
+	const next = { ...server };
+	const detour = typeof next.detour === 'string' ? next.detour.trim() : '';
+	delete next.detour;
+	if (detour && detour !== 'direct' && server?.tag !== 'dns-direct') {
+		next.detour = detour;
+	}
+	return next;
+}
+
+let mockDNSGlobals = { final: 'dns-direct', strategy: 'prefer_ipv4' };
+
 let mockDNSServers = [
+	// UI repro: legacy detour on final DNS — human label instead of outbound tag.
+	{
+		tag: 'dns-direct',
+		type: 'udp',
+		server: '77.88.8.8',
+		server_port: 53,
+		detour: 'Нидерланды🇳🇱🔃',
+	},
+	{
+		tag: 'dns-tunnel',
+		type: 'udp',
+		server: '9.9.9.9',
+		server_port: 53,
+		detour: 'vless-nl-ws',
+	},
 	{
 		tag: 'wizard-upstream',
 		type: 'udp',
@@ -4740,7 +4778,7 @@ const server = http.createServer(async (req, res) => {
 	}
 
 	if (req.method === 'GET' && path === '/singbox/router/dns/servers/list') {
-		send(res, 200, { success: true, data: mockDNSServers });
+		send(res, 200, { success: true, data: mockDNSServers.map(scrubMockDnsServerStored) });
 		return;
 	}
 
@@ -4749,7 +4787,7 @@ const server = http.createServer(async (req, res) => {
 		req.on('data', (c) => (raw += c));
 		req.on('end', () => {
 			try {
-				const payload = JSON.parse(raw || '{}');
+				const payload = sanitizeMockDnsServerForWrite(JSON.parse(raw || '{}'));
 				mockDNSServers.push(payload);
 				send(res, 200, { success: true, data: payload });
 			} catch (e) {
@@ -4770,7 +4808,7 @@ const server = http.createServer(async (req, res) => {
 					send(res, 404, { success: false, error: { code: 'NOT_FOUND', message: 'dns server not found' } });
 					return;
 				}
-				mockDNSServers[idx] = server;
+				mockDNSServers[idx] = sanitizeMockDnsServerForWrite(server);
 				send(res, 200, { success: true, data: { ok: true } });
 			} catch (e) {
 				send(res, 400, { success: false, error: { code: 'INVALID_REQUEST', message: String(e) } });
@@ -4950,6 +4988,29 @@ const server = http.createServer(async (req, res) => {
 				}
 				const [moved] = mockDNSRewrites.splice(from, 1);
 				mockDNSRewrites.splice(to, 0, moved);
+				send(res, 200, { success: true, data: { ok: true } });
+			} catch (e) {
+				send(res, 400, { success: false, error: { code: 'INVALID_REQUEST', message: String(e) } });
+			}
+		});
+		return;
+	}
+
+	if (req.method === 'GET' && path === '/singbox/router/dns/globals') {
+		send(res, 200, { success: true, data: mockDNSGlobals });
+		return;
+	}
+
+	if (req.method === 'PUT' && path === '/singbox/router/dns/globals') {
+		let raw = '';
+		req.on('data', (c) => (raw += c));
+		req.on('end', () => {
+			try {
+				const payload = JSON.parse(raw || '{}');
+				mockDNSGlobals = {
+					final: payload.final ?? mockDNSGlobals.final,
+					strategy: payload.strategy ?? mockDNSGlobals.strategy,
+				};
 				send(res, 200, { success: true, data: { ok: true } });
 			} catch (e) {
 				send(res, 400, { success: false, error: { code: 'INVALID_REQUEST', message: String(e) } });

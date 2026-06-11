@@ -424,6 +424,7 @@ func (s *ServiceImpl) loadRouterConfig() (*RouterConfig, error) {
 		if cfg.DNS.Rules == nil {
 			cfg.DNS.Rules = []DNSRule{}
 		}
+		SanitizeDNSConfig(cfg)
 		return cfg, nil
 	}
 	// Legacy fallback (no orchestrator): read from active path directly.

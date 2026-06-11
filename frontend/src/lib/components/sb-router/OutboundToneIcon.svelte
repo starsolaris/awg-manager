@@ -6,6 +6,7 @@
     Globe,
     Network,
     Rss,
+    OctagonAlert,
     ScanEye,
     TriangleAlert,
     Waypoints,
@@ -52,6 +53,8 @@
   <Globe {...iconProps} />
 {:else if tone === 'via-route'}
   <GitCommitHorizontal {...iconProps} />
+{:else if tone === 'invalid'}
+  <OctagonAlert {...iconProps} />
 {:else if tone === 'system'}
   {#if kind === 'hijack-dns'}
     <Network {...iconProps} />

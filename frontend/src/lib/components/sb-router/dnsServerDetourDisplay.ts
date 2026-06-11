@@ -6,6 +6,10 @@ import type {
 	Subscription,
 } from '$lib/types';
 import type { OutboundGroup } from '$lib/components/routing/singboxRouter/outboundOptions';
+import {
+	getDnsDirectLegacyDetour,
+	normalizeDnsServerDetour,
+} from '$lib/utils/dnsServerDetour';
 import { resolveOutboundDisplay } from './adapters';
 import type { OutboundDisplay } from './types';
 
@@ -14,16 +18,19 @@ export function isDnsServerDirectDetour(detour?: string): boolean {
 	return detour?.trim() === 'direct';
 }
 
-/** Detour не задан — sing-box маршрутизирует DNS по таблице route (дефолт в UI). */
+/** @deprecated use isDnsServerEmptyDetour from $lib/utils/dnsServerDetour */
 export function isDnsServerViaRouteDetour(detour?: string): boolean {
-	return !detour?.trim();
+	return normalizeDnsServerDetour(detour) === undefined;
 }
+
+const INVALID_DNS_DIRECT_TITLE =
+	'Недопустимый detour на final DNS — будет убран при сохранении. Должно быть «Напрямую».';
 
 /**
  * DNS server detour chip:
- * - direct → «Напрямую»
- * - пустой detour → «через route»
- * - конкретный outbound (подписка, туннель, composite…) → обычный мелкий бейдж цели
+ * - empty / direct (non-dns-direct) → «Напрямую»
+ * - dns-direct с legacy detour → фактическое значение, красный + !
+ * - конкретный outbound → обычный мелкий бейдж цели
  */
 export function dnsServerDetourDisplay(
 	server: SingboxRouterDNSServer,
@@ -33,9 +40,38 @@ export function dnsServerDetourDisplay(
 	proxyGroups: SingboxProxyGroup[] = [],
 	singboxTunnels: SingboxTunnel[] = [],
 ): OutboundDisplay {
+	const legacyDirect = getDnsDirectLegacyDetour(server);
+	if (legacyDirect) {
+		const base =
+			legacyDirect === 'direct'
+				? resolveOutboundDisplay(
+						'direct',
+						'direct',
+						outbounds,
+						outboundOptions,
+						subscriptions,
+						proxyGroups,
+						singboxTunnels,
+					)
+				: resolveOutboundDisplay(
+						legacyDirect,
+						'route',
+						outbounds,
+						outboundOptions,
+						subscriptions,
+						proxyGroups,
+						singboxTunnels,
+					);
+		return {
+			...base,
+			tone: 'invalid',
+			invalidHint: INVALID_DNS_DIRECT_TITLE,
+		};
+	}
+
 	const detour = server.detour?.trim() ?? '';
 
-	if (detour === 'direct') {
+	if (detour === 'direct' || !detour) {
 		return resolveOutboundDisplay(
 			'direct',
 			'direct',
@@ -45,15 +81,6 @@ export function dnsServerDetourDisplay(
 			proxyGroups,
 			singboxTunnels,
 		);
-	}
-
-	if (!detour) {
-		return {
-			name: 'via-route',
-			label: 'через route',
-			kind: 'via-route',
-			tone: 'via-route',
-		};
 	}
 
 	return resolveOutboundDisplay(

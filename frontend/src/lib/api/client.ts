@@ -99,7 +99,7 @@ import type {
 	DnsProxyInfo,
 	CatalogPreset,
 } from '$lib/types';
-import { isMockDevMode } from '$lib/env';
+import { sanitizeDnsServerForApi } from '$lib/utils/dnsServerDetour';
 
 export type TrafficPeriod = '5m' | '10m' | '30m' | '1h' | '3h' | '6h' | '12h' | '24h';
 
@@ -2041,20 +2041,22 @@ class ApiClient {
 	}
 
 	async singboxRouterListDNSServers(): Promise<SingboxRouterDNSServer[]> {
-		return this.request('/singbox/router/dns/servers/list');
+		return this.request<SingboxRouterDNSServer[]>('/singbox/router/dns/servers/list');
 	}
 
 	async singboxRouterAddDNSServer(server: SingboxRouterDNSServer): Promise<void> {
+		const payload = sanitizeDnsServerForApi(server);
 		await this.request('/singbox/router/dns/servers/add', {
 			method: 'POST',
-			body: JSON.stringify(server),
+			body: JSON.stringify(payload),
 		});
 	}
 
 	async singboxRouterUpdateDNSServer(tag: string, server: SingboxRouterDNSServer): Promise<void> {
+		const payload = sanitizeDnsServerForApi(server);
 		await this.request('/singbox/router/dns/servers/update', {
 			method: 'POST',
-			body: JSON.stringify({ tag, server }),
+			body: JSON.stringify({ tag, server: payload }),
 		});
 	}
 
