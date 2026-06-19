@@ -440,7 +440,10 @@
 							>External</span>
 						{/if}
 						<span class="file-meta">{humanSize(f.size)} · {f.tagCount} тегов · {formatRelativeTime(f.updated)}</span>
-						{#if f.url}
+						{#if f.external}
+							<!-- External (HR Neo) — источник нам неизвестен (бэкенд лишь
+							     подставляет догадочный default-URL), показываем только бейдж External -->
+						{:else if f.url}
 							<IconButton
 								ariaLabel="Источник"
 								title="Показать источник"
