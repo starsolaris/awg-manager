@@ -184,6 +184,8 @@ func (s *Service) scheduleRestart(reason string) {
 	})
 }
 
+func (s *Service) ScheduleRestart(reason string) { s.scheduleRestart(reason) }
+
 func (s *Service) getVersionCachedLocked() string {
 	if !s.status.Installed {
 		s.versionCached = ""

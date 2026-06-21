@@ -95,6 +95,10 @@ type Orchestrator struct {
 	// nil-safe. Production wires an async closure; the orchestrator calls it
 	// synchronously so async-ness stays a wiring detail (and tests deterministic).
 	ifaceInvalidator func(name string)
+
+	// onTunnelRunning is an optional callback on confirmed running
+	// transition. Nil-safe.
+	onTunnelRunning func(tunnelID string)
 }
 
 // New creates a new Orchestrator.
@@ -136,6 +140,11 @@ func (o *Orchestrator) SetEventBus(bus *events.Bus) { o.bus = bus }
 // SetInterfaceInvalidator wires the NDMS interface-cache refresh invoked on a
 // kernel tunnel's confirmed "running" transition. nil-safe. See issue #328.
 func (o *Orchestrator) SetInterfaceInvalidator(fn func(name string)) { o.ifaceInvalidator = fn }
+
+// SetOnTunnelRunning wires a callback invoked when any tunnel (kernel or
+// NativeWG) reaches confirmed running state. Used to restart HydraRoute Neo
+// so it re-applies CONNMARK rules.
+func (o *Orchestrator) SetOnTunnelRunning(fn func(tunnelID string)) { o.onTunnelRunning = fn }
 
 // SetSupportsASC sets the ASC support flag.
 func (o *Orchestrator) SetSupportsASC(fn func() bool) {
@@ -454,6 +463,9 @@ func (o *Orchestrator) updateState(action Action) {
 				if ndmsName := tunnel.NewNames(t.ID).NDMSName; ndmsName != "" {
 					o.ifaceInvalidator(ndmsName)
 				}
+			}
+			if o.onTunnelRunning != nil {
+				o.onTunnelRunning(t.ID)
 			}
 		case ActionStopKernel, ActionStopNativeWG, ActionSuspendProxy, ActionSuspendKernel:
 			o.bus.Publish("tunnel:state", events.TunnelStateEvent{
