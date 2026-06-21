@@ -835,7 +835,7 @@ func filterTProxyInbound(in []Inbound) []Inbound {
 // tproxy-in inbound if missing. Idempotent. Used by Reconcile to
 // recover from a prior failed-Install rollback (which used to strip
 // the inbound destructively).
-func (s *ServiceImpl) healTProxyInbound(ctx context.Context) error {
+func (s *ServiceImpl) healTProxyInbound(ctx context.Context, udpTimeout string) error {
 	cfg, err := s.loadRouterConfig()
 	if err != nil {
 		return err
@@ -845,11 +845,7 @@ func (s *ServiceImpl) healTProxyInbound(ctx context.Context) error {
 			return nil // already present, nothing to do
 		}
 	}
-	settings, err := s.deps.Settings.Load()
-	if err != nil {
-		return err
-	}
-	cfg.Inbounds = ensureTProxyInbound(cfg.Inbounds, settings.SingboxRouter.UDPTimeout)
+	cfg.Inbounds = ensureTProxyInbound(cfg.Inbounds, udpTimeout)
 	// System self-heal — direct write, no staging UI.
 	return s.persistConfigDirect(ctx, cfg)
 }
@@ -1211,7 +1207,7 @@ func (s *ServiceImpl) reconcileInstalled(ctx context.Context, sr storage.Singbox
 	// Self-heal: a previous Install rollback or upgrade hop may
 	// have left 20-router.json without the tproxy-in inbound. Re-add
 	// it idempotently so sing-box keeps listening on TPROXYPort.
-	if err := s.healTProxyInbound(ctx); err != nil {
+	if err := s.healTProxyInbound(ctx, sr.UDPTimeout); err != nil {
 		s.appLog.Warn("heal-tproxy", "", err.Error())
 	}
 	return nil
