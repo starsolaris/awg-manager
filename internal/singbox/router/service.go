@@ -691,7 +691,7 @@ func (s *ServiceImpl) Enable(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	cfg.Inbounds = ensureTProxyInbound(cfg.Inbounds)
+	cfg.Inbounds = ensureTProxyInbound(cfg.Inbounds, sr.UDPTimeout)
 	cfg.Outbounds = stripAutoManagedDirect(cfg.Outbounds)
 	cfg.EnsureSystemRules(sr.SnifferEnabled)
 	// Settings was already loaded above; revalidate here in case the
@@ -845,7 +845,11 @@ func (s *ServiceImpl) healTProxyInbound(ctx context.Context) error {
 			return nil // already present, nothing to do
 		}
 	}
-	cfg.Inbounds = ensureTProxyInbound(cfg.Inbounds)
+	settings, err := s.deps.Settings.Load()
+	if err != nil {
+		return err
+	}
+	cfg.Inbounds = ensureTProxyInbound(cfg.Inbounds, settings.SingboxRouter.UDPTimeout)
 	// System self-heal — direct write, no staging UI.
 	return s.persistConfigDirect(ctx, cfg)
 }
@@ -866,7 +870,23 @@ func (s *ServiceImpl) healTProxyInbound(ctx context.Context) error {
 // "::" for the same reason.
 const inboundListen = "0.0.0.0"
 
-func ensureTProxyInbound(in []Inbound) []Inbound {
+// DefaultUDPTimeout is the fallback UDP session timeout for tproxy-in when
+// the user has not configured a custom value. 3 minutes matches the original
+// sing-box default, but may cause games and other UDP applications that go
+// quiet for longer than 3 minutes to drop their session unexpectedly.
+const DefaultUDPTimeout = "3m0s"
+
+// resolveUDPTimeout returns the effective UDP timeout string: the user value
+// when non-empty, otherwise DefaultUDPTimeout.
+func resolveUDPTimeout(configured string) string {
+	if configured != "" {
+		return configured
+	}
+	return DefaultUDPTimeout
+}
+
+func ensureTProxyInbound(in []Inbound, udpTimeout string) []Inbound {
+	effective := resolveUDPTimeout(udpTimeout)
 	hasTProxy := false
 	hasRedirect := false
 	for i := range in {
@@ -882,9 +902,8 @@ func ensureTProxyInbound(in []Inbound) []Inbound {
 			if !in[i].UDPFragment {
 				in[i].UDPFragment = true
 			}
-			if in[i].UDPTimeout == "" {
-				in[i].UDPTimeout = "3m0s"
-			}
+			// Always apply the effective timeout — user may have changed it.
+			in[i].UDPTimeout = effective
 			// tcp_fast_open is meaningless on a UDP-only inbound.
 			if in[i].TCPFastOpen {
 				in[i].TCPFastOpen = false
@@ -915,7 +934,7 @@ func ensureTProxyInbound(in []Inbound) []Inbound {
 			ListenPort:  TPROXYPort,
 			Network:     "udp",
 			UDPFragment: true,
-			UDPTimeout:  "3m0s",
+			UDPTimeout:  effective,
 		}}, out...)
 	}
 	if !hasRedirect {
@@ -1589,6 +1608,11 @@ func NormalizeSingboxRouterSettings(sr storage.SingboxRouterSettings) (storage.S
 	}
 	if err := validateIngressRefs(sr.IngressInterfaces); err != nil {
 		return sr, err
+	}
+	if sr.UDPTimeout != "" {
+		if _, err := time.ParseDuration(sr.UDPTimeout); err != nil {
+			return sr, fmt.Errorf("udpTimeout: invalid duration %q: %w", sr.UDPTimeout, err)
+		}
 	}
 	return sr, nil
 }
