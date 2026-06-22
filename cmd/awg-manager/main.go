@@ -1207,7 +1207,9 @@ func main() {
 	monitoringService.SetClashState(monitoring.NewClashState(clashProxy.ClashBaseURL, nil))
 	monitoringService.SetSingboxDelay(singboxOp.Clash())
 
-	srv.SetSingboxRouterHandler(api.NewSingboxRouterHandler(routerSvc, loggingService))
+	singboxRouterHandler := api.NewSingboxRouterHandler(routerSvc, loggingService)
+	singboxRouterHandler.SetOutboundRefCheckers(deviceProxySvc, routerSvc)
+	srv.SetSingboxRouterHandler(singboxRouterHandler)
 	srv.SetAWGOutboundsHandler(api.NewAWGOutboundsHandler(awgoutboundsSvc))
 	srv.SetSingboxConfigHandler(api.NewSingboxConfigHandler(sbOrch.ConfigDir))
 
