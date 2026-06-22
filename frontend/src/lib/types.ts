@@ -882,7 +882,7 @@ export interface DeviceProxyInstance extends DeviceProxyConfig {
 	name: string;
 }
 
-export type DeviceProxyOutboundKind = 'direct' | 'singbox' | 'subscription' | 'awg';
+export type DeviceProxyOutboundKind = 'direct' | 'singbox' | 'subscription' | 'awg' | 'router';
 
 export interface DeviceProxyOutbound {
 	tag: string;
