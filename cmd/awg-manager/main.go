@@ -1119,7 +1119,6 @@ func main() {
 		WANInterfaces:          &routerWANInterfaceAdapter{store: ndmsQueries.Interfaces},
 		BindableInterfaces:     bindableAdapter,
 		IngressResolver:        &routerIngressResolverAdapter{store: ndmsQueries.Interfaces},
-		NativeProxies:          singboxOp,
 		PresetCatalog:          presetCatalog,
 		GeoData:                geoDataStore,
 	})

@@ -155,19 +155,18 @@ func TestRenameOutboundReferences_RewritesEveryReference(t *testing.T) {
 }
 
 func TestStripAutoManagedDirect(t *testing.T) {
-	// nativeProxies: KeenOS-native SOCKS proxies (NDMS ProxyN / kernel t2sN
-	// that are NOT ours) — user-created direct outbounds to these must survive.
-	nativeProxies := map[string]bool{"t2s0": true}
 	in := []Outbound{
-		{Type: "direct", Tag: "native-socks", BindInterface: "t2s0"},  // native proxy — keep
-		{Type: "direct", Tag: "our-sb", BindInterface: "t2s1"},        // our sing-box proxy — strip
+		// Proxy kernel ifaces (t2sN) are NEVER stripped: the bindable picker
+		// only ever offers KeenOS-native (non-ours) proxies, so any direct→t2s
+		// here is a user choice to keep (#323). No runtime lookup at strip time.
+		{Type: "direct", Tag: "native-socks", BindInterface: "t2s0"},  // proxy — keep
 		{Type: "direct", Tag: "direct"},                              // no bind_interface — keep
 		{Type: "selector", Tag: "comp", Outbounds: []string{"awg-x"}}, // composite — keep
 		{Type: "direct", Tag: "managed-awg", BindInterface: "opkgtun0"}, // managed AWG — strip
 		{Type: "direct", Tag: "nwg", BindInterface: "nwg0"},           // NativeWG — strip
 		{Type: "direct", Tag: "ipsec-vpn", BindInterface: "ipsec0"},  // user VPN — keep
 	}
-	got := stripAutoManagedDirect(in, nativeProxies)
+	got := stripAutoManagedDirect(in)
 	tags := map[string]bool{}
 	for _, o := range got {
 		tags[o.Tag] = true
@@ -177,7 +176,7 @@ func TestStripAutoManagedDirect(t *testing.T) {
 			t.Errorf("expected %q kept, missing from %+v", want, got)
 		}
 	}
-	for _, strip := range []string{"our-sb", "managed-awg", "nwg"} {
+	for _, strip := range []string{"managed-awg", "nwg"} {
 		if tags[strip] {
 			t.Errorf("expected %q stripped, still present: %+v", strip, got)
 		}
@@ -187,9 +186,9 @@ func TestStripAutoManagedDirect(t *testing.T) {
 func TestUserDirectOutboundSurvivesStrip(t *testing.T) {
 	cfg := &RouterConfig{Outbounds: []Outbound{
 		{Type: "direct", Tag: "ipsec-vpn", BindInterface: "ipsec0"},
-		{Type: "direct", Tag: "awg-auto", BindInterface: "t2s0"},
+		{Type: "direct", Tag: "awg-auto", BindInterface: "opkgtun0"},
 	}}
-	cfg.Outbounds = stripAutoManagedDirect(cfg.Outbounds, nil)
+	cfg.Outbounds = stripAutoManagedDirect(cfg.Outbounds)
 	if len(cfg.Outbounds) != 1 || cfg.Outbounds[0].Tag != "ipsec-vpn" {
 		t.Fatalf("user direct should survive, AWG stripped: %+v", cfg.Outbounds)
 	}
