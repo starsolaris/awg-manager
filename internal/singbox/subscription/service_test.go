@@ -1815,3 +1815,63 @@ func TestCreate_ExcludedKeys(t *testing.T) {
 		t.Fatal("excluded-by-key must not materialize on create")
 	}
 }
+
+func TestPreviewURL_CollisionDistinctKeys(t *testing.T) {
+	svc, _ := newTestService(t)
+	body := "vless://3a3b1c2e-9999-4321-aaaa-1234567890ab@h.example:443?security=tls&sni=a.sni#A\n" +
+		"vless://3a3b1c2e-9999-4321-aaaa-1234567890ab@h.example:443?security=tls&sni=b.sni#B\n"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+
+	members, err := svc.PreviewURL(context.Background(), srv.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(members) != 2 {
+		t.Fatalf("members=%d want 2", len(members))
+	}
+	if members[0].Key == members[1].Key {
+		t.Errorf("colliding endpoints must get distinct preview Key, both = %s", members[0].Key)
+	}
+}
+
+func TestAddManualMember_DistinctSNIOnSameEndpoint(t *testing.T) {
+	svc, _ := newTestService(t)
+	// inline-подписка с одним членом, наполняем руками
+	sub, err := svc.Create(context.Background(), CreateInput{
+		Label:   "manual",
+		Inline:  "vless://3a3b1c2e-9999-4321-aaaa-1234567890ab@h.example:443?security=tls&sni=a.sni#A",
+		Enabled: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// тот же host:port:uuid, другой SNI → должен добавиться
+	updated, err := svc.AddManualMember(context.Background(), sub.ID,
+		"vless://3a3b1c2e-9999-4321-aaaa-1234567890ab@h.example:443?security=tls&sni=b.sni#B")
+	if err != nil {
+		t.Fatalf("second SNI must add, got %v", err)
+	}
+	if len(updated.MemberTags) != 2 {
+		t.Errorf("MemberTags=%d want 2", len(updated.MemberTags))
+	}
+}
+
+func TestAddManualMember_ExactRepeatRejected(t *testing.T) {
+	svc, _ := newTestService(t)
+	sub, err := svc.Create(context.Background(), CreateInput{
+		Label:   "manual",
+		Inline:  "vless://3a3b1c2e-9999-4321-aaaa-1234567890ab@h.example:443?security=tls&sni=a.sni#A",
+		Enabled: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.AddManualMember(context.Background(), sub.ID,
+		"vless://3a3b1c2e-9999-4321-aaaa-1234567890ab@h.example:443?security=tls&sni=a.sni#dup")
+	if !errors.Is(err, ErrMemberDuplicate) {
+		t.Fatalf("exact repeat must be ErrMemberDuplicate, got %v", err)
+	}
+}
