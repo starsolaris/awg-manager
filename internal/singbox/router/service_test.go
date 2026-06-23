@@ -114,6 +114,15 @@ type fakeSingbox struct {
 	binary      string
 	lastErr     string
 	isRunningFn func() (bool, int)
+
+	// clearManualStopCalls counts ClearManualStop invocations;
+	// clearManualStopErr lets a test make it fail.
+	clearManualStopCalls int
+	clearManualStopErr   error
+
+	// startCalls counts Start() invocations so a test can assert the
+	// drift-heal actually (re)spawns a dead process.
+	startCalls int
 }
 
 func (f *fakeSingbox) Reload() error { return nil }
@@ -123,7 +132,11 @@ func (f *fakeSingbox) IsRunning() (bool, int) {
 	}
 	return false, 0
 }
-func (f *fakeSingbox) Start() error                              { return nil }
+func (f *fakeSingbox) Start() error { f.startCalls++; return nil }
+func (f *fakeSingbox) ClearManualStop() error {
+	f.clearManualStopCalls++
+	return f.clearManualStopErr
+}
 func (f *fakeSingbox) Stop() error                               { return nil }
 func (f *fakeSingbox) ValidateConfigDir(_ context.Context) error { return nil }
 func (f *fakeSingbox) ConfigDir() string                         { return f.dir }
@@ -141,6 +154,7 @@ func newTestSingbox(t *testing.T) *fakeSingbox {
 func newTestService(_ *testing.T, deps Deps) *ServiceImpl {
 	return &ServiceImpl{deps: deps}
 }
+
 
 // stubListeningProbe overrides the singboxListeningProbe seam for the test
 // duration so waitForSingbox/GetStatus don't read the real procfs.
@@ -423,6 +437,82 @@ func TestReconcile_PolicyMarkChanged_Reinstalls(t *testing.T) {
 	}
 }
 
+// TestUpdateSettings_MalformedSubnet_RejectedBeforeSaveAndInstall guards the
+// COMMIT-safety invariant for the API path. A malformed BypassExtraSubnets must
+// be rejected by the Normalize gate in UpdateSettings BEFORE it is persisted or
+// any iptables Install runs. The resolver error is intentionally discarded with
+// `_` at the two Install sites, so this gate is the only thing stopping a broken
+// `-d` rule from reaching iptables-restore — which would fail the whole COMMIT
+// and drop all interception. Remove the Normalize call from UpdateSettings and
+// this test fails (bad value would persist and reconcile could install it).
+func TestUpdateSettings_MalformedSubnet_RejectedBeforeSaveAndInstall(t *testing.T) {
+	settingsStore := newTestSettingsStore(t, storage.SingboxRouterSettings{PolicyName: "Policy0"})
+	restoreCalls := 0
+	ipt := newStubIPTables(func(_ context.Context, _ string) error {
+		restoreCalls++
+		return nil
+	})
+	svc := newTestService(t, Deps{Settings: settingsStore, IPTables: ipt})
+
+	err := svc.UpdateSettings(context.Background(), storage.SingboxRouterSettings{
+		PolicyName:         "Policy0",
+		WANAutoDetect:      true,
+		BypassExtraSubnets: "vpn.example.com", // hostname — rejected by the resolver
+	})
+	if err == nil {
+		t.Fatal("expected UpdateSettings to reject a hostname in bypassExtraSubnets")
+	}
+	if !strings.Contains(err.Error(), "bypassExtraSubnets") {
+		t.Errorf("error should name the field, got %q", err.Error())
+	}
+	if restoreCalls != 0 {
+		t.Errorf("Install must NOT run on rejected input, got %d restore call(s)", restoreCalls)
+	}
+	// Fail-closed: the rejected value must not have been persisted.
+	all, err := settingsStore.Load()
+	if err != nil {
+		t.Fatalf("settingsStore.Load: %v", err)
+	}
+	if all.SingboxRouter.BypassExtraSubnets != "" {
+		t.Errorf("malformed value was persisted: %q", all.SingboxRouter.BypassExtraSubnets)
+	}
+}
+
+// TestReconcileInstalled_MalformedSubnet_RejectedBeforeInstall guards the second
+// Install entry point. reconcileInstalled re-Normalizes the settings it is
+// handed (e.g. a hand-edited settings.json read from disk), so a malformed
+// BypassExtraSubnets is rejected before the `_`-discarded resolver call and the
+// Install that would emit a broken `-d`. With the gate present no restore runs;
+// remove it and reconcile would reach Install (restoreCalls != 0) and fail.
+func TestReconcileInstalled_MalformedSubnet_RejectedBeforeInstall(t *testing.T) {
+	restoreCalls := 0
+	ipt := newStubIPTables(func(_ context.Context, _ string) error {
+		restoreCalls++
+		return nil
+	})
+	svc := &ServiceImpl{
+		deps: Deps{
+			Policies:           &fakeAccessPolicyProvider{mark: "0xffffaaa"},
+			IPTables:           ipt,
+			WANIPCollector:     &fakeWANIPCollector{},
+			Singbox:            newTestSingbox(t),
+			NetfilterPreflight: func(context.Context) error { return nil },
+		},
+	}
+	err := svc.reconcileInstalled(context.Background(), storage.SingboxRouterSettings{
+		Enabled:            true,
+		PolicyName:         "Policy0",
+		WANAutoDetect:      true,
+		BypassExtraSubnets: "999.999.999.999/24", // invalid octets — rejected by the resolver
+	})
+	if err == nil {
+		t.Fatal("expected reconcileInstalled to reject malformed bypassExtraSubnets")
+	}
+	if restoreCalls != 0 {
+		t.Errorf("Install must NOT run on rejected input, got %d restore call(s)", restoreCalls)
+	}
+}
+
 func TestReconcile_PolicyDeleted_Disables(t *testing.T) {
 	settingsStore := newTestSettingsStore(t, storage.SingboxRouterSettings{
 		Enabled:    true,
@@ -457,6 +547,67 @@ func TestReconcile_PolicyDeleted_Disables(t *testing.T) {
 	}
 	if all.SingboxRouter.Enabled {
 		t.Error("expected SingboxRouter.Enabled=false after policy-missing disable")
+	}
+}
+
+// TestReconcile_SkipsWhileTransitionInFlight verifies that Reconcile yields to
+// an in-flight SwitchRoutingMode (which holds transitionMu across its
+// Disable→persist→Enable sequence): when the lock is held, Reconcile returns nil
+// and performs NO work — no iptables side effects and no settings mutation — so a
+// periodic heal tick cannot race the switch's own (possibly rolling-back)
+// Enable/Disable on the transiently half-flipped persisted state (bug B1). Once
+// the lock is released, Reconcile proceeds normally.
+func TestReconcile_SkipsWhileTransitionInFlight(t *testing.T) {
+	settingsStore := newTestSettingsStore(t, storage.SingboxRouterSettings{
+		Enabled:    true,
+		PolicyName: "Policy0",
+	})
+	// Policy missing → if Reconcile ran, it would fail-safe Disable (iptables
+	// Uninstall calls + Enabled flipped to false). Holding transitionMu must
+	// suppress all of that.
+	policies := &fakeAccessPolicyProvider{markErr: query.ErrPolicyMarkNotFound}
+	fe := &fakeExec{}
+	it := newTestIPTables(fe)
+
+	svc := newTestService(t, Deps{
+		Settings: settingsStore,
+		Policies: policies,
+		IPTables: it,
+		Singbox:  newTestSingbox(t),
+	})
+	svc.currentMark = "0xffffaaa"
+
+	// Simulate a switch in flight by holding transitionMu (as SwitchRoutingMode
+	// does across its whole sequence).
+	svc.transitionMu.Lock()
+	if err := svc.Reconcile(context.Background()); err != nil {
+		t.Fatalf("Reconcile while transition in flight: %v", err)
+	}
+	if len(fe.calls) != 0 {
+		t.Errorf("expected NO iptables calls while transition in flight, got %d", len(fe.calls))
+	}
+	all, err := settingsStore.Load()
+	if err != nil {
+		t.Fatalf("Load after skipped Reconcile: %v", err)
+	}
+	if !all.SingboxRouter.Enabled {
+		t.Error("expected Enabled to stay true (Reconcile did no work) while transition in flight")
+	}
+
+	// Release the lock — Reconcile now proceeds and fail-safe disables.
+	svc.transitionMu.Unlock()
+	if err := svc.Reconcile(context.Background()); err != nil {
+		t.Fatalf("Reconcile after lock release: %v", err)
+	}
+	if len(fe.calls) == 0 {
+		t.Error("expected iptables calls from Uninstall after lock release, got none")
+	}
+	all, err = settingsStore.Load()
+	if err != nil {
+		t.Fatalf("Load after proceeding Reconcile: %v", err)
+	}
+	if all.SingboxRouter.Enabled {
+		t.Error("expected Enabled=false after Reconcile proceeded and disabled")
 	}
 }
 
@@ -859,7 +1010,13 @@ func newOrchedTestService(t *testing.T) (*ServiceImpl, string) {
 		Slot:     orchestrator.SlotRouter,
 		Filename: "20-router.json",
 	}); err != nil {
-		t.Fatalf("orch.Register: %v", err)
+		t.Fatalf("orch.Register SlotRouter: %v", err)
+	}
+	if err := orch.Register(orchestrator.SlotMeta{
+		Slot:     orchestrator.SlotFakeIP,
+		Filename: "21-fakeip.json",
+	}); err != nil {
+		t.Fatalf("orch.Register SlotFakeIP: %v", err)
 	}
 	if err := orch.Bootstrap(); err != nil {
 		t.Fatalf("orch.Bootstrap: %v", err)
@@ -1073,6 +1230,111 @@ func TestValidateSingboxRouterSettings_ValidExtraPorts(t *testing.T) {
 	}
 	if err := ValidateSingboxRouterSettings(sr); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestNormalize_BypassExtraSubnets(t *testing.T) {
+	base := storage.SingboxRouterSettings{WANAutoDetect: true}
+
+	ok := base
+	ok.BypassExtraSubnets = "203.0.113.0/24, 10.8.0.5"
+	if _, err := NormalizeSingboxRouterSettings(ok); err != nil {
+		t.Fatalf("valid subnets rejected: %v", err)
+	}
+
+	bad := base
+	bad.BypassExtraSubnets = "vpn.example.com"
+	if _, err := NormalizeSingboxRouterSettings(bad); err == nil {
+		t.Fatal("hostname should be rejected")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// fakeip engine settings — Normalize defaults + Validate
+// ---------------------------------------------------------------------------
+
+func TestNormalizeSingboxRouterSettings_DefaultsFakeIPFields(t *testing.T) {
+	// Empty/zero fakeip fields are defaulted from DefaultFakeIPTunParams — a
+	// single source of truth.
+	def := DefaultFakeIPTunParams()
+	sr := storage.SingboxRouterSettings{WANAutoDetect: true}
+	out, err := NormalizeSingboxRouterSettings(sr)
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if out.FakeIPStack != "gvisor" {
+		t.Errorf("FakeIPStack = %q, want gvisor", out.FakeIPStack)
+	}
+	if out.FakeIPPool4 != def.Inet4Range {
+		t.Errorf("FakeIPPool4 = %q, want %q", out.FakeIPPool4, def.Inet4Range)
+	}
+	if out.FakeIPPool6 != def.Inet6Range {
+		t.Errorf("FakeIPPool6 = %q, want %q", out.FakeIPPool6, def.Inet6Range)
+	}
+	if out.FakeIPMTU != def.MTU {
+		t.Errorf("FakeIPMTU = %d, want %d", out.FakeIPMTU, def.MTU)
+	}
+}
+
+func TestNormalizeSingboxRouterSettings_PreservesFakeIPFields(t *testing.T) {
+	// Idempotent: non-empty user values survive normalization unchanged.
+	sr := storage.SingboxRouterSettings{
+		WANAutoDetect: true,
+		FakeIPStack:   "system",
+		FakeIPPool4:   "10.64.0.0/12",
+		FakeIPPool6:   "fc00::/7",
+		FakeIPMTU:     9000,
+	}
+	out, err := NormalizeSingboxRouterSettings(sr)
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if out.FakeIPStack != "system" || out.FakeIPPool4 != "10.64.0.0/12" ||
+		out.FakeIPPool6 != "fc00::/7" || out.FakeIPMTU != 9000 {
+		t.Errorf("user values not preserved: %+v", out)
+	}
+	// Re-running normalize must be a fixed point (idempotent).
+	out2, _ := NormalizeSingboxRouterSettings(out)
+	if out2.FakeIPStack != out.FakeIPStack || out2.FakeIPPool4 != out.FakeIPPool4 ||
+		out2.FakeIPPool6 != out.FakeIPPool6 || out2.FakeIPMTU != out.FakeIPMTU {
+		t.Errorf("normalize not idempotent: %+v vs %+v", out, out2)
+	}
+}
+
+func TestValidateSingboxRouterSettings_FakeIPFields(t *testing.T) {
+	base := storage.SingboxRouterSettings{WANAutoDetect: true}
+	cases := []struct {
+		name    string
+		mut     func(s *storage.SingboxRouterSettings)
+		wantErr bool
+	}{
+		{"defaults ok", func(s *storage.SingboxRouterSettings) {}, false},
+		{"stack gvisor", func(s *storage.SingboxRouterSettings) { s.FakeIPStack = "gvisor" }, false},
+		{"stack system", func(s *storage.SingboxRouterSettings) { s.FakeIPStack = "system" }, false},
+		{"stack bad", func(s *storage.SingboxRouterSettings) { s.FakeIPStack = "mixed" }, true},
+		{"pool4 bad", func(s *storage.SingboxRouterSettings) { s.FakeIPPool4 = "not-a-cidr" }, true},
+		{"pool4 is v6", func(s *storage.SingboxRouterSettings) { s.FakeIPPool4 = "fd00::/8" }, true},
+		{"pool6 empty ok", func(s *storage.SingboxRouterSettings) { s.FakeIPPool6 = "" }, false},
+		{"pool6 valid v6", func(s *storage.SingboxRouterSettings) { s.FakeIPPool6 = "fc00::/7" }, false},
+		{"pool6 is v4", func(s *storage.SingboxRouterSettings) { s.FakeIPPool6 = "10.0.0.0/8" }, true},
+		{"pool6 bad", func(s *storage.SingboxRouterSettings) { s.FakeIPPool6 = "garbage" }, true},
+		{"mtu too small", func(s *storage.SingboxRouterSettings) { s.FakeIPMTU = 100 }, true},
+		{"mtu too big", func(s *storage.SingboxRouterSettings) { s.FakeIPMTU = 99999 }, true},
+		{"mtu min ok", func(s *storage.SingboxRouterSettings) { s.FakeIPMTU = 576 }, false},
+		{"mtu max ok", func(s *storage.SingboxRouterSettings) { s.FakeIPMTU = 9000 }, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sr := base
+			tc.mut(&sr)
+			err := ValidateSingboxRouterSettings(sr)
+			if tc.wantErr && err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 
@@ -1636,5 +1898,26 @@ func TestReconcile_IngressChangeTriggersInstall(t *testing.T) {
 	// currentIngress must be updated.
 	if !slices.Equal(svc.currentIngress, []string{"nwgX"}) {
 		t.Errorf("currentIngress not updated: %v", svc.currentIngress)
+	}
+}
+
+func TestNormalize_RoutingModeDefaultAndValidate(t *testing.T) {
+	base := storage.SingboxRouterSettings{DeviceMode: "policy", WANAutoDetect: true}
+	got, err := NormalizeSingboxRouterSettings(base)
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if got.RoutingMode != "tproxy" {
+		t.Errorf("default mode = %q, want tproxy", got.RoutingMode)
+	}
+	bogus := base
+	bogus.RoutingMode = "bogus"
+	if _, err := NormalizeSingboxRouterSettings(bogus); err == nil {
+		t.Error("expected error for invalid routing mode")
+	}
+	ftun := base
+	ftun.RoutingMode = "fakeip-tun"
+	if _, err := NormalizeSingboxRouterSettings(ftun); err != nil {
+		t.Errorf("fakeip-tun should be valid: %v", err)
 	}
 }

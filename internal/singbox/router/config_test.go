@@ -156,39 +156,58 @@ func TestRenameOutboundReferences_RewritesEveryReference(t *testing.T) {
 
 func TestStripAutoManagedDirect(t *testing.T) {
 	in := []Outbound{
-		{Type: "direct", Tag: "legacy-a", BindInterface: "t2s0"},     // AWG kernel — strip
+		// Proxy kernel ifaces (t2sN) are NEVER stripped: the bindable picker
+		// only ever offers KeenOS-native (non-ours) proxies, so any direct→t2s
+		// here is a user choice to keep (#323). No runtime lookup at strip time.
+		{Type: "direct", Tag: "native-socks", BindInterface: "t2s0"},  // proxy — keep
 		{Type: "direct", Tag: "direct"},                              // no bind_interface — keep
 		{Type: "selector", Tag: "comp", Outbounds: []string{"awg-x"}}, // composite — keep
-		{Type: "direct", Tag: "legacy-b", BindInterface: "nwg0"},     // NativeWG — strip
+		{Type: "direct", Tag: "managed-awg", BindInterface: "opkgtun0"}, // managed AWG — strip
+		{Type: "direct", Tag: "nwg", BindInterface: "nwg0"},           // NativeWG — strip
 		{Type: "direct", Tag: "ipsec-vpn", BindInterface: "ipsec0"},  // user VPN — keep
-		{Type: "direct", Tag: "ike", BindInterface: "ike0"},          // user VPN — keep
 	}
 	got := stripAutoManagedDirect(in)
-	if len(got) != 4 {
-		t.Fatalf("want 4 kept, got %d (%+v)", len(got), got)
-	}
 	tags := map[string]bool{}
 	for _, o := range got {
 		tags[o.Tag] = true
 	}
-	for _, want := range []string{"direct", "comp", "ipsec-vpn", "ike"} {
+	for _, want := range []string{"native-socks", "direct", "comp", "ipsec-vpn"} {
 		if !tags[want] {
 			t.Errorf("expected %q kept, missing from %+v", want, got)
 		}
 	}
-	if tags["legacy-a"] || tags["legacy-b"] {
-		t.Errorf("auto-managed AWG/WG direct outbounds should be stripped: %+v", got)
+	for _, strip := range []string{"managed-awg", "nwg"} {
+		if tags[strip] {
+			t.Errorf("expected %q stripped, still present: %+v", strip, got)
+		}
 	}
 }
 
 func TestUserDirectOutboundSurvivesStrip(t *testing.T) {
 	cfg := &RouterConfig{Outbounds: []Outbound{
 		{Type: "direct", Tag: "ipsec-vpn", BindInterface: "ipsec0"},
-		{Type: "direct", Tag: "awg-auto", BindInterface: "t2s0"},
+		{Type: "direct", Tag: "awg-auto", BindInterface: "opkgtun0"},
 	}}
 	cfg.Outbounds = stripAutoManagedDirect(cfg.Outbounds)
 	if len(cfg.Outbounds) != 1 || cfg.Outbounds[0].Tag != "ipsec-vpn" {
 		t.Fatalf("user direct should survive, AWG stripped: %+v", cfg.Outbounds)
+	}
+}
+
+func TestIsStrippedDirectBind(t *testing.T) {
+	cases := map[string]bool{
+		"awg0":   true,  // auto-managed AWG → стрипается
+		"nwg1":   true,  // auto-managed NativeWG → стрипается
+		"wg0":    true,  // auto-managed wireguard → стрипается
+		"t2s0":   false, // proxy iface — намеренно сохраняется
+		"proxy3": false, // proxy iface — намеренно сохраняется
+		"ipsec0": false, // пользовательский VPN — не auto-managed
+		"":       false, // пусто
+	}
+	for iface, want := range cases {
+		if got := IsStrippedDirectBind(iface); got != want {
+			t.Errorf("IsStrippedDirectBind(%q) = %v, want %v", iface, got, want)
+		}
 	}
 }
 
@@ -424,5 +443,81 @@ func TestUpdateCompositeOutbound_RejectsCycle(t *testing.T) {
 	err := cfg.UpdateCompositeOutbound("A", Outbound{Type: "selector", Tag: "A", Outbounds: []string{"B"}})
 	if err == nil {
 		t.Fatal("update closing a cycle must be rejected")
+	}
+}
+
+func TestInbound_TunFieldsMarshal(t *testing.T) {
+	in := Inbound{
+		Type: "tun", Tag: "tun-in", InterfaceName: "opkgtun10",
+		Address: []string{"172.18.0.1/30", "fdfe:dcba:9876::1/126"},
+		MTU: 1500, Stack: "gvisor",
+	}
+	b, _ := json.Marshal(in)
+	s := string(b)
+	for _, want := range []string{`"interface_name":"opkgtun10"`, `"address":["172.18.0.1/30"`, `"mtu":1500`, `"stack":"gvisor"`} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %s in %s", want, s)
+		}
+	}
+	if strings.Contains(s, `"listen"`) {
+		t.Errorf("tun inbound must omit listen: %s", s)
+	}
+}
+
+func TestRoute_DefaultDomainResolverMarshal(t *testing.T) {
+	r := Route{DefaultDomainResolver: &DomainResolver{Server: "real"}}
+	b, _ := json.Marshal(r)
+	if !strings.Contains(string(b), `"default_domain_resolver":{"server":"real"}`) {
+		t.Errorf("got %s", b)
+	}
+}
+
+func TestOutbound_DomainResolverAndServerMarshal(t *testing.T) {
+	o := Outbound{Type: "vless", Tag: "p", Server: "example.com", DomainResolver: &DomainResolver{Server: "real"}}
+	b := string(mustMarshal(t, o))
+	if !strings.Contains(b, `"server":"example.com"`) {
+		t.Errorf("missing server: %s", b)
+	}
+	if !strings.Contains(b, `"domain_resolver":{"server":"real"}`) {
+		t.Errorf("missing domain_resolver: %s", b)
+	}
+	plain := string(mustMarshal(t, Outbound{Type: "direct", Tag: "d"}))
+	if strings.Contains(plain, `"server"`) {
+		t.Errorf("plain outbound must omit server: %s", plain)
+	}
+	if strings.Contains(plain, `"domain_resolver"`) {
+		t.Errorf("plain outbound must omit domain_resolver: %s", plain)
+	}
+}
+
+func mustMarshal(t *testing.T, v any) []byte {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	return b
+}
+
+func TestRouterConfig_CacheFileFakeIPMarshal(t *testing.T) {
+	c := NewEmptyConfig()
+	c.Experimental = &Experimental{CacheFile: &CacheFile{Enabled: true, StoreFakeIP: true, Path: "/opt/etc/awg-manager/singbox/cache.db"}}
+	b, _ := json.Marshal(c)
+	for _, want := range []string{`"experimental"`, `"cache_file"`, `"store_fakeip":true`, `"path":"/opt/etc/awg-manager/singbox/cache.db"`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("missing %s: %s", want, b)
+		}
+	}
+}
+
+// TestRouterConfig_CacheFileEnabledAlwaysEmitted verifies enabled is always
+// marshaled, even when false — otherwise a disabled cache with store_fakeip set
+// would silently emit a cache-OFF config (footgun).
+func TestRouterConfig_CacheFileEnabledAlwaysEmitted(t *testing.T) {
+	c := NewEmptyConfig()
+	c.Experimental = &Experimental{CacheFile: &CacheFile{Enabled: false, StoreFakeIP: true}}
+	b, _ := json.Marshal(c)
+	if !strings.Contains(string(b), `"enabled":false`) {
+		t.Errorf("expected enabled:false to be emitted: %s", b)
 	}
 }

@@ -107,6 +107,12 @@ var defaultDir = filepath.Dir(installer.DefaultBinaryPath)
 // override defaultDir to redirect this too.
 var defaultCacheDBPath = filepath.Join(defaultDir, "cache.db")
 
+// DefaultCacheDBPath exports the sing-box experimental.cache_file path so the
+// fakeip-tun router wiring (cmd/awg-manager) can pin its store_fakeip cache to
+// the same writable file without importing the unexported var. Keeps the router
+// package decoupled from the operator's path layout (it just receives a string).
+func DefaultCacheDBPath() string { return defaultCacheDBPath }
+
 var singboxAllowedLogLevels = map[string]struct{}{
 	"trace": {},
 	"debug": {},
@@ -314,6 +320,13 @@ func NewOperator(d OperatorDeps) *Operator {
 	op.proc.OnStderrLine = op.handleStderrLine
 	op.proc.OnStdoutLine = op.handleStdoutLine
 	op.proc.OnExit = op.handleExit
+	// A tun inbound cannot survive SIGHUP — every reload path (scheduler
+	// rule-set refresh, tunnel ApplyConfig, orchestrator) routes through
+	// proc.Reload, which consults this to restart instead. o.orch is wired
+	// later via SetOrch; the closure reads it at reload time, so nil-now is fine.
+	op.proc.ReloadNeedsRestart = func() bool {
+		return op.orch != nil && op.orch.CurrentHasTun()
+	}
 	return op
 }
 
@@ -1859,18 +1872,17 @@ func (o *Operator) AddTunnels(ctx context.Context, linksText string) ([]TunnelIn
 				existingFps[fp] = p.Tag // защита от повтора внутри одного batch
 			}
 		}
-		var freeIdx int
-		if ndmsProxyEnabled {
-			var idxErr error
-			freeIdx, idxErr = o.proxyMgr.NextFreeIndex(ctx, reserved)
-			if idxErr != nil {
-				parseErrs = append(parseErrs, BatchError{Input: p.Tag, Err: fmt.Errorf("allocate proxy slot: %w", idxErr)})
-				continue
+		alloc := func() (int, error) {
+			if ndmsProxyEnabled {
+				return o.proxyMgr.NextFreeIndex(ctx, reserved)
 			}
-		} else {
-			freeIdx = nextFreeListenPortSlot(cfg, reserved)
+			return nextFreeListenPortSlot(cfg, reserved), nil
 		}
-		listenPort := firstPort + freeIdx
+		freeIdx, listenPort, allocErr := allocBindableSlot(reserved, alloc)
+		if allocErr != nil {
+			parseErrs = append(parseErrs, BatchError{Input: p.Tag, Err: fmt.Errorf("allocate listen port: %w", allocErr)})
+			continue
+		}
 		tag := allocUniqueTunnelTag(tagOccupied, p.Tag)
 		outbound, jerr := outboundJSONWithTag(p.Outbound, tag)
 		if jerr != nil {
@@ -2171,9 +2183,36 @@ func (o *Operator) removeOrphanSingboxProxies(ctx context.Context) error {
 	return o.proxyMgr.RemoveOrphanSingboxProxies(ctx, tunnelTags, portSlots, subProxyIdx)
 }
 
+// ListNativeProxies returns kernel names of KeenOS-native (non-ours) NDMS
+// Proxy interfaces — bind targets for router direct outbounds (#323). Assembles
+// the same ownership sets as removeOrphanSingboxProxies and delegates.
+func (o *Operator) ListNativeProxies(ctx context.Context) ([]string, error) {
+	cfg, err := o.loadConfig()
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	tunnelTags := map[string]bool{}
+	portSlots := map[int]bool{}
+	if cfg != nil {
+		for _, t := range cfg.Tunnels() {
+			tunnelTags[t.Tag] = true
+			slot := t.ListenPort - firstPort
+			if slot >= 0 {
+				portSlots[slot] = true
+			}
+		}
+	}
+	subProxyIdx := map[int]bool{}
+	for _, sp := range o.subscriptionProxies() {
+		subProxyIdx[sp.Index] = true
+	}
+	return o.proxyMgr.ListNativeProxies(ctx, tunnelTags, portSlots, subProxyIdx)
+}
+
 // Reconcile: ensure process is running if config has tunnels; ensure Proxies are up.
 // Honours the sticky-stop intent — when the user pressed Stop, watchdog/Reconcile
-// must not bring sing-box back up. Cleared only by Control("start"/"restart").
+// must not bring sing-box back up. Cleared by Control("start"/"restart") or an
+// explicit router Enable (ClearManualStop).
 //
 // В режиме NDMS Proxy disabled пропускает SyncProxies и, при наличии
 // сигнала, делает one-shot orphan cleanup.
@@ -2339,6 +2378,26 @@ func (o *Operator) Control(ctx context.Context, action string) error {
 // or watchdog tick. Used to plumb the intent into orchestrator.SetShouldRun.
 func (o *Operator) IsManuallyStopped() bool {
 	return o.manuallyStopped.Load()
+}
+
+// ClearManualStop clears the sticky manual-stop intent (in-memory mirror +
+// persisted settings) so the orchestrator's cold-start is no longer
+// suppressed. Invoked by an EXPLICIT router enable: enabling the router is an
+// explicit intent to run sing-box, which must override a prior master-Stop —
+// otherwise the orchestrator cold-start stays suppressed by
+// shouldRun()=!IsManuallyStopped and Enable times out on the boot window with
+// a misleading readiness error (stand-found 2026-06-15). No-op (no settings
+// write) when the intent is already clear, so the common path stays
+// write-free. Mirrors Control("start")'s intent-clear without forcing a
+// process start (the orchestrator cold-start does the actual launch).
+func (o *Operator) ClearManualStop() error {
+	if !o.manuallyStopped.Load() {
+		return nil
+	}
+	if o.runtimeLogger != nil {
+		o.runtimeLogger.Info("clear-manual-stop", "", "clearing sticky manual-stop intent on explicit router enable")
+	}
+	return o.setManualStop(false)
 }
 
 // setManualStop updates the in-memory sticky-stop flag and persists it

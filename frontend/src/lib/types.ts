@@ -718,6 +718,13 @@ export interface DNSRouteSettings {
 	refreshDailyTime?: string;  // "HH:MM" 24h format
 }
 
+export interface GeoFileSettings {
+	autoRefreshEnabled: boolean;
+	refreshIntervalHours: number;
+	refreshMode?: 'interval' | 'daily';
+	refreshDailyTime?: string;
+}
+
 export interface Settings {
 	schemaVersion?: number;
 	authEnabled: boolean;
@@ -729,6 +736,7 @@ export interface Settings {
 	updates: UpdateSettings;
 	download: DownloadSettings;
 	dnsRoute: DNSRouteSettings;
+	geoFile: GeoFileSettings;
 	connectivityCheckUrl: string;
 	usageLevel: UsageLevel;
 	hiddenSystemTunnels?: string[];
@@ -874,7 +882,7 @@ export interface DeviceProxyInstance extends DeviceProxyConfig {
 	name: string;
 }
 
-export type DeviceProxyOutboundKind = 'direct' | 'singbox' | 'subscription' | 'awg';
+export type DeviceProxyOutboundKind = 'direct' | 'singbox' | 'subscription' | 'awg' | 'router';
 
 export interface DeviceProxyOutbound {
 	tag: string;
@@ -1275,12 +1283,6 @@ export interface MonitoringSnapshot {
 	updatedAt: string;
 }
 
-export interface MonitoringSample {
-	ts: string;
-	latencyMs: number | null;
-	ok: boolean;
-}
-
 // #endregion
 
 // ─────────────────────────────────────────────
@@ -1291,6 +1293,12 @@ export interface SingboxRouterSettings {
 	enabled: boolean;
 	policyName: string;
 	deviceMode?: 'policy' | 'all';
+	/**
+	 * Active routing mode. Source of truth for the FakeIP page's engine-state
+	 * derivation. Served by GET /singbox/router/settings (omitempty; absent on
+	 * legacy payloads → treat as 'tproxy'). NOT on the status endpoint.
+	 */
+	routingMode?: 'tproxy' | 'fakeip-tun';
 	snifferEnabled: boolean;
 	// WAN-binding discriminator (mirrors backend storage):
 	//   wanAutoDetect=true  + wanInterface=""    → sing-box auto_detect_interface
@@ -1300,7 +1308,20 @@ export interface SingboxRouterSettings {
 	wanInterface?: string; // kernel system-name (e.g. "ppp0"); empty when wanAutoDetect=true
 	bypassPresets?: string[];
 	bypassExtraPorts?: string;
+	bypassExtraSubnets?: string;
 	ingressInterfaces?: string[];
+	// fakeip-tun engine settings (user-editable; round-trip via GET/PUT
+	// /singbox/router/settings). Defaults mirror DefaultFakeIPTunParams:
+	//   fakeipStack: gvisor (system → lower throughput, backend forces gso:false)
+	//   fakeipPool4: "198.18.0.0/15", fakeipPool6: "fc00::/18" ("" disables v6)
+	//   fakeipMtu: 1500. All omitempty on the wire → absent on legacy payloads.
+	fakeipStack?: 'gvisor' | 'system';
+	fakeipPool4?: string;
+	fakeipPool6?: string;
+	fakeipMtu?: number;
+	// UDP session timeout for tproxy-in. Go duration string (e.g. "3m0s", "10m0s").
+	// Empty = backend default (3m0s). Increase to fix dropped sessions in games.
+	udpTimeout?: string;
 }
 
 // WAN interface for the sing-box router WAN-binding picker. `name` is
@@ -1347,9 +1368,35 @@ export interface SingboxRouterStatus {
 	outboundAwgCount: number;
 	outboundCompositeCount: number;
 	final: string;
+	/**
+	 * Active fakeip tun iface (kernel name, e.g. "opkgtun0"). Present only in
+	 * fakeip-tun mode once the tun is provisioned (backend Status.FakeIPIface
+	 * omitempty); absent otherwise.
+	 */
+	fakeipIface?: string;
+	/** DNS-адрес для ручной настройки клиентов в режиме fakeip-tun. */
+	fakeipDns?: string;
+	/** Адрес tun-шлюза (хост /30, e.g. «172.18.0.1») в режиме fakeip-tun. */
+	fakeipTunAddr?: string;
 	issues?: SingboxRouterIssue[];
 	/** Последняя fatal-причина sing-box; непусто только при «СБОЙ» (enabled && !active). */
 	lastError?: string;
+}
+
+export interface SingboxRouterTransitionStep {
+	step: 'start' | 'teardown' | 'provision' | 'readiness' | 'ready' | 'rollback' | 'error';
+	status: 'current' | 'done' | 'error';
+	message?: string;
+}
+
+export interface SingboxRouterTransitionData {
+	transitionId: string;
+	from: 'off' | 'tproxy' | 'fakeip-tun';
+	to: 'off' | 'tproxy' | 'fakeip-tun';
+	step: SingboxRouterTransitionStep;
+	done?: boolean;
+	finalState?: 'off' | 'tproxy' | 'fakeip-tun';
+	error?: string;
 }
 
 /**
@@ -1412,6 +1459,40 @@ export interface SingboxRouterInspectRequest {
 	domain: string;
 	port?: number;
 	protocol?: string;
+}
+
+/**
+ * One per-rule decision from the DNS-branch inspector. Mirrors
+ * SingboxRouterInspectMatch but targets a DNS server tag instead of a
+ * route outbound.
+ */
+export interface SingboxRouterInspectDNSMatch {
+	index: number;
+	matched: boolean;
+	server?: string;
+	conditions?: string[];
+	reason?: string;
+}
+
+export interface SingboxRouterInspectDNSResult {
+	input: string;
+	inputType: 'domain' | 'ip';
+	matches: SingboxRouterInspectDNSMatch[];
+	matchedRule: number;
+	/** Resolved DNS-server tag (matched rule's server, or the final server). */
+	server: string;
+	/** How the resolved server answers the query. */
+	classification: 'fakeip' | 'real' | 'local';
+	/** fakeip pool (inet4_range [+ inet6_range]); empty unless fakeip. */
+	pool?: string;
+	final: string;
+	note?: string;
+}
+
+export interface SingboxRouterInspectDNSRequest {
+	domain: string;
+	queryType?: string;
+	sourceIP?: string;
 }
 
 export interface SingboxRouterInspectProgress {
@@ -1530,7 +1611,7 @@ export interface SingboxRouterAvailableClient {
 	active?: boolean;
 }
 
-export type SingboxRouterDNSType = 'udp' | 'tls' | 'https' | 'quic' | 'h3' | 'local';
+export type SingboxRouterDNSType = 'udp' | 'tls' | 'https' | 'quic' | 'h3' | 'local' | 'fakeip';
 
 export type SingboxRouterDNSStrategy =
 	| ''
@@ -1654,6 +1735,17 @@ export interface SubscriptionMember {
 	security?: string;
 }
 
+export interface SubscriptionPreviewMember {
+	key: string; // identity-суффикс (subID-независимый) для исключения при создании
+	label?: string;
+	protocol: string;
+	server: string;
+	port: number;
+	sni?: string;
+	transport?: string;
+	security?: string;
+}
+
 export type SubscriptionMode = 'selector' | 'urltest';
 
 export interface SubscriptionURLTest {
@@ -1706,6 +1798,8 @@ export interface Subscription {
 	enabled: boolean;
 	mode: SubscriptionMode;
 	urlTest?: SubscriptionURLTest;
+	excludedTags?: string[];
+	excludedMembers?: SubscriptionMember[];
 }
 
 export interface SubscriptionRefreshResult {
@@ -1732,6 +1826,7 @@ export interface CreateSubscriptionInput {
 	enabled: boolean;
 	mode?: SubscriptionMode;
 	urlTest?: SubscriptionURLTest;
+	excludedKeys?: string[];
 }
 
 export interface UpdateSubscriptionInput {

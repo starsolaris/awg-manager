@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from 'svelte';
+  import { TriangleAlert } from 'lucide-svelte';
   import { appLogEntries, singboxLogEntries, logStoreFor, type LogBucket, type LogStore } from '$lib/stores/logs';
   import { LoadingSpinner, EmptyState } from '$lib/components/layout';
   import { Button } from '$lib/components/ui';
@@ -17,6 +18,11 @@
   import LogsContextMenu from './LogsContextMenu.svelte';
   import type { LogsFilter } from './LogsToolbar.svelte';
   import type { LogEntry } from '$lib/types';
+
+  // lockBucket: фиксирует журнал на один bucket (напр. FakeIP-чип «Журнал» —
+  // только 'singbox') и прячет переключатель app/singbox в тулбаре. Не задан —
+  // прежнее поведение (переключаемый, как на странице Диагностики).
+  let { lockBucket }: { lockBucket?: LogBucket } = $props();
 
   const STORAGE_KEY = 'awgm.diagnostics.logsFilter';
   const BUCKET_KEY = 'awgm.diagnostics.logsBucket';
@@ -102,7 +108,10 @@
   }
 
   let filter = $state<LogsFilter>(loadFilter());
-  let bucket = $state<LogBucket>(loadBucket());
+  // lockBucket — фиксированный проп (не меняется в рантайме): захват начального
+  // значения — намеренный.
+  // svelte-ignore state_referenced_locally
+  let bucket = $state<LogBucket>(lockBucket ?? loadBucket());
   let showFullTimestamp = $state(loadFullTimestamp());
   let paused = $state(false);
   /** User clicked Pause — do not auto-resume when scrolled back to the top. */
@@ -365,6 +374,7 @@
   }
 
   async function setBucket(b: LogBucket) {
+    if (lockBucket) return; // bucket зафиксирован — переключение запрещено
     if (b === bucket) return;
     manualPause = false;
     paused = false;
@@ -633,11 +643,7 @@
       description="Включите логирование в настройках для записи событий."
     >
       {#snippet icon()}
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48">
-          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-          <line x1="12" y1="9" x2="12" y2="13" />
-          <circle cx="12" cy="17" r="1" fill="currentColor" />
-        </svg>
+        <TriangleAlert size={48} aria-hidden="true" />
       {/snippet}
       {#snippet action()}
         <Button variant="primary" size="md" href="/settings">Открыть настройки</Button>
@@ -650,6 +656,7 @@
       bind:filter
       onFilterChange={applyFilter}
       {bucket}
+      bucketLocked={!!lockBucket}
       onBucketChange={setBucket}
       {paused}
       {bufferCount}

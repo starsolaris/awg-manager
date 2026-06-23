@@ -810,15 +810,38 @@ func IsAutoManagedIface(name string) bool {
 // owned by awgoutbounds). User-created direct outbounds bound to other VPN
 // interfaces (IPSec/IKEv2/etc.) are kept — they live here in 20-router.json.
 // Composite outbounds and bind_interface-less direct are always kept.
+//
+// Proxy kernel ifaces (t2sN / proxyN) are NEVER stripped (#323): awgoutbounds
+// does not generate proxy outbounds, and the bindable picker only ever offers
+// KeenOS-native (non-ours) proxies, so any direct→t2s here is a deliberate
+// user bind. Keeping them unconditionally avoids a runtime NDMS lookup in the
+// Enable path — a transient lookup error must never silently delete a user's
+// persisted outbound.
 func stripAutoManagedDirect(in []Outbound) []Outbound {
 	out := make([]Outbound, 0, len(in))
 	for _, o := range in {
-		if o.Type == "direct" && o.BindInterface != "" && IsAutoManagedIface(o.BindInterface) {
+		if o.Type == "direct" && o.BindInterface != "" &&
+			IsStrippedDirectBind(o.BindInterface) {
 			continue
 		}
 		out = append(out, o)
 	}
 	return out
+}
+
+// IsStrippedDirectBind reports whether a direct outbound bound to iface is
+// removed from the effective config by stripAutoManagedDirect (auto-managed
+// AWG/WG/NWG ifaces, excluding proxy t2sN/proxyN which are kept). Exported so
+// the device-proxy outbound catalog can hide non-selectable router directs.
+func IsStrippedDirectBind(iface string) bool {
+	return IsAutoManagedIface(iface) && !isProxyIface(iface)
+}
+
+// isProxyIface reports a Keenetic proxy kernel interface name (tun2socks
+// "t2sN" or "proxyN"). These front a SOCKS proxy and are valid bind targets.
+func isProxyIface(name string) bool {
+	n := strings.ToLower(name)
+	return strings.HasPrefix(n, "t2s") || strings.HasPrefix(n, "proxy")
 }
 
 func (r Rule) hasAnyMatcher() bool {
@@ -827,19 +850,29 @@ func (r Rule) hasAnyMatcher() bool {
 		r.IPIsPrivate != nil
 }
 
+// validateCIDROrAddr accepts a value that is either a CIDR prefix or a bare IP
+// address; it returns an error labeled with the caller-supplied field name when
+// the value is neither. Shared by validateRule and validateDNSRule so the
+// CIDR-or-address parse logic lives in one place; the label carries the
+// per-caller error prefix (e.g. "ip_cidr %q", "dns rule: invalid source_ip_cidr %q").
+func validateCIDROrAddr(label, v string) error {
+	if _, err := netip.ParsePrefix(v); err != nil {
+		if _, err := netip.ParseAddr(v); err != nil {
+			return fmt.Errorf(label+" %q: %w", v, err)
+		}
+	}
+	return nil
+}
+
 func validateRule(r Rule) error {
 	for _, cidr := range r.IPCIDR {
-		if _, err := netip.ParsePrefix(cidr); err != nil {
-			if _, err := netip.ParseAddr(cidr); err != nil {
-				return fmt.Errorf("ip_cidr %q: %w", cidr, err)
-			}
+		if err := validateCIDROrAddr("ip_cidr", cidr); err != nil {
+			return err
 		}
 	}
 	for _, cidr := range r.SourceIPCIDR {
-		if _, err := netip.ParsePrefix(cidr); err != nil {
-			if _, err := netip.ParseAddr(cidr); err != nil {
-				return fmt.Errorf("source_ip_cidr %q: %w", cidr, err)
-			}
+		if err := validateCIDROrAddr("source_ip_cidr", cidr); err != nil {
+			return err
 		}
 	}
 	for _, p := range r.Port {

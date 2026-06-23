@@ -18,6 +18,7 @@ type Settings struct {
 	Updates              UpdateSettings    `json:"updates"`
 	Download             DownloadSettings  `json:"download"`
 	DNSRoute             DNSRouteSettings  `json:"dnsRoute"`
+	GeoFile              GeoFileSettings   `json:"geoFile"`
 	ConnectivityCheckURL string            `json:"connectivityCheckUrl"`
 	UsageLevel           string            `json:"usageLevel"`
 	ServerInterfaces     []string          `json:"serverInterfaces,omitempty"`
@@ -27,8 +28,8 @@ type Settings struct {
 	// ServerPeerSecrets stores private keys for peers created via AWG Manager
 	// on built-in/marked NDMS servers (NDMS itself does not retain client keys).
 	// map[serverID]map[publicKey]ServerPeerSecret
-	ServerPeerSecrets  map[string]map[string]ServerPeerSecret `json:"serverPeerSecrets,omitempty"`
-	ManagedServers       []ManagedServer   `json:"managedServers,omitempty"`
+	ServerPeerSecrets map[string]map[string]ServerPeerSecret `json:"serverPeerSecrets,omitempty"`
+	ManagedServers    []ManagedServer                        `json:"managedServers,omitempty"`
 	// ManagedServer is retained for one release as the migration source.
 	// migrateManagedServers() moves it into ManagedServers[0] on first read
 	// and clears it on the next save.
@@ -54,6 +55,23 @@ type Settings struct {
 	// 0.0.0.0/0 with "subnet overlaps with the other peer". Set after a
 	// successful sweep; the sweep runs at startup while false.
 	ManagedPeerAllowIPsMigrated bool `json:"managedPeerAllowIPsMigrated,omitempty"`
+	// FakeIP is backend-managed operational state for sing-box fakeip-tun
+	// mode (see FakeIPState). Pointer so it's absent from JSON when never
+	// provisioned; nil = not provisioned. Written ONLY via SetFakeIPState.
+	FakeIP *FakeIPState `json:"fakeip,omitempty"`
+}
+
+// FakeIPState is backend-managed operational state for sing-box fakeip-tun
+// mode. Written ONLY by the fakeip-tun lifecycle (Enable/Disable/reap) via
+// SettingsStore.SetFakeIPState — never by the settings API. Index is the
+// allocated OpkgTun index (iface "opkgtun<N>"), valid only when Provisioned;
+// Inet4Range/Inet6Range record the pool ranges last applied so a pool change
+// can invalidate the sing-box cache.
+type FakeIPState struct {
+	Provisioned bool   `json:"provisioned,omitempty"`
+	Index       int    `json:"index,omitempty"`
+	Inet4Range  string `json:"inet4Range,omitempty"`
+	Inet6Range  string `json:"inet6Range,omitempty"`
 }
 
 type DownloadSettings struct {
@@ -68,7 +86,11 @@ type SingboxRouterSettings struct {
 	// "policy" (default) keeps the historical NDMS access-policy mark
 	// filter. "all" installs unmarked PREROUTING jumps so every LAN
 	// device that reaches the router netfilter path is filtered.
-	DeviceMode     string `json:"deviceMode,omitempty"`
+	DeviceMode string `json:"deviceMode,omitempty"`
+	// RoutingMode selects the sing-box routing path:
+	// "tproxy" (default) keeps the historical TPROXY/REDIRECT behavior;
+	// "fakeip-tun" routes via a fake-IP DNS pool + tun device.
+	RoutingMode    string `json:"routingMode,omitempty"`
 	SnifferEnabled bool   `json:"snifferEnabled"`
 	// WANAutoDetect is the discriminator for the WAN-binding mode.
 	// true (default) → sing-box uses route.auto_detect_interface; the
@@ -94,10 +116,36 @@ type SingboxRouterSettings struct {
 	// exclusions in "PORT UDP|TCP" format (e.g. "51820 UDP, 1194 TCP").
 	// Parsed at iptables generation time. Empty = no extras.
 	BypassExtraPorts string `json:"bypassExtraPorts,omitempty"`
+	// BypassExtraSubnets — пользовательский список IPv4 IP/CIDR через
+	// запятую/пробел (напр. "203.0.113.0/24, 10.8.0.5"). Трафик к ним идёт
+	// целиком мимо sing-box (включая DNS/53). Голый IP трактуется как /32.
+	// Парсится в момент генерации правил. Пусто = нет исключений.
+	BypassExtraSubnets string `json:"bypassExtraSubnets,omitempty"`
 	// IngressInterfaces — ref'ы интерфейсов, чей ingress-трафик заворачивается
 	// в sing-box. Формат: "managed:Wireguard3" (резолвится в kernel-имя на
 	// сборке спека) или "iface:nwg5" (kernel-имя как есть). Пусто = выключено.
 	IngressInterfaces []string `json:"ingressInterfaces,omitempty"`
+	// --- fakeip-tun engine settings (USER-editable) ---
+	// These mirror the static fakeip-tun engine knobs (default
+	// DefaultFakeIPTunParams) but persisted + validated so the UI can edit them.
+	// Unlike FakeIPState (backend-managed operational state) these are user
+	// intent, defaulted by NormalizeSingboxRouterSettings.
+	//
+	// FakeIPStack selects the sing-tun stack: "gvisor" (default, robust) or
+	// "system" (lower CPU/RAM; on this kernel REQUIRES gso:false — set
+	// automatically by the config builder).
+	FakeIPStack string `json:"fakeipStack,omitempty"`
+	// FakeIPPool4 is the fakeip v4 pool CIDR (default "198.18.0.0/15").
+	FakeIPPool4 string `json:"fakeipPool4,omitempty"`
+	// FakeIPPool6 is the fakeip v6 pool CIDR (default "fc00::/18"); "" disables v6.
+	FakeIPPool6 string `json:"fakeipPool6,omitempty"`
+	// FakeIPMTU is the tun MTU (default 1500).
+	FakeIPMTU int `json:"fakeipMtu,omitempty"`
+	// UDPTimeout задаёт таймаут UDP-сессий в tproxy-in inbound (формат Go duration,
+	// например "3m0s", "10m0s"). Пустая строка = использовать значение по умолчанию
+	// (DefaultUDPTimeout). Увеличение помогает при работе игр и других UDP-приложений,
+	// которые могут молчать дольше стандартных 3 минут.
+	UDPTimeout string `json:"udpTimeout,omitempty"`
 }
 
 // ManagedServer represents the user-created WireGuard server interface.
@@ -210,6 +258,16 @@ type DNSRouteSettings struct {
 	RefreshIntervalHours int    `json:"refreshIntervalHours"`       // default: 0 (user must choose)
 	RefreshMode          string `json:"refreshMode,omitempty"`      // "interval" (default/empty) or "daily"
 	RefreshDailyTime     string `json:"refreshDailyTime,omitempty"` // "HH:MM" 24h format, e.g. "03:00"
+}
+
+// GeoFileSettings contains geo-file (geoip/geosite) auto-refresh configuration.
+// Mirrors DNSRouteSettings. The download route is NOT stored here — background
+// refresh reuses the global Download route via downloader.ResolveClient(ctx, nil).
+type GeoFileSettings struct {
+	AutoRefreshEnabled   bool   `json:"autoRefreshEnabled"`         // default: false
+	RefreshIntervalHours int    `json:"refreshIntervalHours"`       // default: 0 (user chooses)
+	RefreshMode          string `json:"refreshMode,omitempty"`      // "interval" (default) or "daily"
+	RefreshDailyTime     string `json:"refreshDailyTime,omitempty"` // "HH:MM" 24h, e.g. "03:00"
 }
 
 // ConnectivityCheckConfig holds per-tunnel connectivity check settings.
