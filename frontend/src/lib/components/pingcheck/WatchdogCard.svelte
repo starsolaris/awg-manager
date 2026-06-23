@@ -1,6 +1,6 @@
 <!-- frontend/src/lib/components/pingcheck/WatchdogCard.svelte -->
 <script lang="ts">
-	import { Card, StatusDot, VersionBadge, Badge, Button, type StatusDotVariant, type BadgeVariant } from '$lib/components/ui';
+	import { StatusDot, VersionBadge, Badge, Button, type StatusDotVariant, type BadgeVariant } from '$lib/components/ui';
 	import { TunnelDelaySparkBars } from '$lib/components/tunnels';
 	import { Settings, Power, Info, Check, X, RotateCcw } from 'lucide-svelte';
 	import { formatTime } from '$lib/utils/format';
@@ -32,7 +32,8 @@
 	const fmt = (v: number | null) => (v === null ? '—' : `${v}ms`);
 </script>
 
-<Card>
+<div class="wd-card" class:recovering={statusKind === 'recovering'}>
+	<!-- Header -->
 	<div class="wd-head">
 		<StatusDot variant={st.dot} pulse={st.pulse} size="sm" />
 		<span class="wd-name">{name}</span>
@@ -44,19 +45,22 @@
 	</div>
 
 	{#if hasPingcheck && stats}
+		<!-- Config line -->
 		<div class="wd-config">{configLine}</div>
 
+		<!-- Stats grid -->
 		<div class="wd-stats">
 			<div class="wd-stat"><span class="v">{fmt(stats.avgMs)}</span><span class="k">avg</span></div>
 			<div class="wd-stat"><span class="v">{stats.failsLabel}</span><span class="k">сбои</span></div>
-			<div class="wd-stat"><span class="v"><RotateCcw size={13} /> {stats.restarts}</span><span class="k">рестарты</span></div>
+			<div class="wd-stat"><span class="v"><RotateCcw size={13} />{stats.restarts}</span><span class="k">рестарты</span></div>
 			<div class="wd-stat"><span class="v" class:loss={stats.lossPct > 0}>{stats.lossPct}%</span><span class="k">loss</span></div>
 		</div>
 
+		<!-- Last checks -->
 		<div class="wd-checks">
 			<div class="wd-checks-head">
-				<span>Последние проверки</span>
-				<span class="wd-minmax" title="Окно ~2ч / последние {stats.history.length} проверок">
+				<span class="wd-checks-title">Последние проверки</span>
+				<span class="wd-minmax" title="последние {stats.history.length} проверок">
 					min {fmt(stats.minMs)} · max {fmt(stats.maxMs)}
 				</span>
 			</div>
@@ -77,50 +81,165 @@
 			</div>
 		</div>
 
+		<!-- Footer -->
 		<div class="wd-foot">
-			<Button variant="ghost" onclick={onConfigure}>
+			<Button variant="outline-primary" size="sm" onclick={onConfigure}>
 				{#snippet iconBefore()}<Settings size={14} />{/snippet}
 				Настроить
 			</Button>
 		</div>
 	{:else}
+		<!-- No pingcheck -->
 		<div class="wd-note">
 			<span class="wd-note-text"><Info size={14} /> Pingcheck/watchdog не настроен для этого туннеля.</span>
-			<div class="wd-foot">
-				<Button variant="ghost" onclick={onConfigure}>
-					{#snippet iconBefore()}<Power size={14} />{/snippet}
-					Включить
-				</Button>
-			</div>
+		</div>
+		<div class="wd-foot">
+			<Button variant="outline-primary" size="sm" onclick={onConfigure}>
+				{#snippet iconBefore()}<Power size={14} />{/snippet}
+				Включить
+			</Button>
 		</div>
 	{/if}
-</Card>
+</div>
 
 <style>
-	.wd-head { display: flex; align-items: center; gap: 8px; }
-	.wd-name { font-weight: 600; font-size: 14px; color: var(--color-text); }
+	.wd-card {
+		display: flex;
+		flex-direction: column;
+		background: var(--color-bg-tertiary);
+		border: 1px solid var(--color-border);
+		border-radius: 12px;
+		overflow: hidden;
+	}
+	.wd-card.recovering {
+		border-color: var(--color-warning-border);
+	}
+
+	/* Header */
+	.wd-head {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		padding: 12px 14px;
+		border-bottom: 1px solid var(--color-border);
+	}
+	.wd-name {
+		font-weight: 600;
+		font-size: 14px;
+		color: var(--color-text-primary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
 	.wd-spacer { flex: 1; }
-	.wd-config { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-muted); margin-top: 8px; }
-	.wd-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-top: 10px; }
-	.wd-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; }
-	.wd-stat .v { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-mono); font-size: 15px; font-weight: 600; color: var(--color-text); }
+
+	/* Config line */
+	.wd-config {
+		padding: 8px 14px;
+		font-family: var(--font-mono);
+		font-size: 11px;
+		line-height: 1.6;
+		color: var(--color-text-muted);
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	/* Stats grid */
+	.wd-stats {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		border-bottom: 1px solid var(--color-border);
+	}
+	.wd-stat {
+		padding: 9px 6px;
+		text-align: center;
+		border-right: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
+	}
+	.wd-stat:last-child { border-right: none; }
+	.wd-stat .v {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 3px;
+		font-family: var(--font-mono);
+		font-size: 15px;
+		font-weight: 600;
+		color: var(--color-text-primary);
+	}
 	.wd-stat .v.loss { color: var(--color-error); }
-	.wd-stat .k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-muted); }
-	.wd-checks { margin-top: 10px; }
-	.wd-checks-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
-	.wd-checks-head span:first-child { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted); }
-	.wd-minmax { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-muted); }
-	.wd-bars { height: 36px; display: flex; align-items: flex-end; }
-	.wd-bars :global(.tunnel-delay-spark) { height: 36px; flex: 1; }
-	.wd-log { display: flex; flex-direction: column; margin-top: 10px; }
-	.wd-log-row { display: flex; align-items: center; gap: 10px; padding: 3px 0; font-family: var(--font-mono); font-size: 11px; }
+	.wd-stat .k {
+		font-size: 10px;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-muted);
+		margin-top: 2px;
+	}
+
+	/* Last checks */
+	.wd-checks { padding: 12px 14px; flex: 1; }
+	.wd-checks-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		margin-bottom: 6px;
+	}
+	.wd-checks-title {
+		font-size: 10px;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-muted);
+	}
+	.wd-minmax {
+		font-family: var(--font-mono);
+		font-size: 11px;
+		color: var(--color-text-muted);
+	}
+	.wd-bars {
+		display: flex;
+		align-items: flex-end;
+		height: 38px;
+		margin-bottom: 12px;
+		padding: 2px;
+		background: color-mix(in srgb, var(--color-border) 22%, transparent);
+		border-radius: 4px;
+	}
+	.wd-bars :global(.tunnel-delay-spark) {
+		flex: 1;
+		height: 100%;
+		gap: 2px;
+	}
+	.wd-log { display: flex; flex-direction: column; }
+	.wd-log-row {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 4px 0;
+		font-family: var(--font-mono);
+		font-size: 11px;
+		border-top: 1px solid color-mix(in srgb, var(--color-border) 45%, transparent);
+	}
+	.wd-log-row:first-child { border-top: none; }
 	.wd-log-row .ts { color: var(--color-text-muted); min-width: 56px; }
 	.wd-log-row .ico { display: inline-flex; align-items: center; }
 	.wd-log-row .ico.ok { color: var(--color-success); }
 	.wd-log-row .ico.bad { color: var(--color-error); }
-	.wd-log-row .lat { color: var(--color-text); min-width: 52px; }
+	.wd-log-row .lat { color: var(--color-text-primary); min-width: 52px; }
 	.wd-log-row .note { color: var(--color-text-muted); font-style: italic; }
-	.wd-foot { display: flex; justify-content: flex-end; margin-top: 10px; }
-	.wd-note { display: flex; flex-direction: column; gap: 12px; color: var(--color-text-muted); font-size: 12px; margin-top: 8px; }
+
+	/* Footer */
+	.wd-foot {
+		padding: 10px 14px;
+		border-top: 1px solid var(--color-border);
+		display: flex;
+		justify-content: flex-end;
+	}
+
+	/* No-pingcheck note */
+	.wd-note {
+		padding: 16px 14px;
+		flex: 1;
+		font-size: 12px;
+		color: var(--color-text-muted);
+	}
 	.wd-note-text { display: inline-flex; align-items: center; gap: 6px; }
 </style>
