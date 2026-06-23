@@ -124,3 +124,37 @@ func TestBuildStreamFromQuery_RealitySidTooLong_Rejected(t *testing.T) {
 		t.Errorf("expected error on sid > 16 hex chars")
 	}
 }
+
+func TestBuildStreamFromQuery_XHTTP(t *testing.T) {
+	q := parseQuery(t, "type=xhttp&security=tls&path=/xh&host=cdn.example.com&sni=foo.com&mode=packet-up")
+	s, err := BuildStreamFromQuery(q, "example.com")
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if s.Network != "xhttp" {
+		t.Errorf("network=%q, want xhttp", s.Network)
+	}
+	if s.Path != "/xh" {
+		t.Errorf("path=%q, want /xh", s.Path)
+	}
+	if s.Host != "cdn.example.com" {
+		t.Errorf("host=%q, want cdn.example.com", s.Host)
+	}
+	if s.Mode != "packet-up" {
+		t.Errorf("mode=%q, want packet-up", s.Mode)
+	}
+	if s.TLS == nil || s.TLS.ServerName != "foo.com" {
+		t.Errorf("tls=%+v", s.TLS)
+	}
+}
+
+func TestBuildStreamFromQuery_SplitHTTPAlias(t *testing.T) {
+	q := parseQuery(t, "type=splithttp&security=tls&path=/sh")
+	s, err := BuildStreamFromQuery(q, "example.com")
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if s.Network != "xhttp" {
+		t.Errorf("network=%q, want xhttp (splithttp alias)", s.Network)
+	}
+}
