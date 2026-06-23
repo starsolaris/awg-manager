@@ -107,6 +107,40 @@ func TestApplyDiff_DuplicatesAcrossNewAndExisting(t *testing.T) {
 	}
 }
 
+func mkReality(server string, port uint16, sni, sid string) vlink.ParsedOutbound {
+	ob := map[string]any{
+		"type": "vless", "server": server, "server_port": port,
+		"uuid": "00000000-0000-0000-0000-000000000000",
+		"tls": map[string]any{
+			"enabled":     true,
+			"server_name": sni,
+			"reality":     map[string]any{"enabled": true, "short_id": sid},
+		},
+	}
+	raw, _ := json.Marshal(ob)
+	return vlink.ParsedOutbound{Tag: "tmp", Protocol: "vless", Server: server, Port: port, Outbound: raw}
+}
+
+func TestExtendedKey_DistinguishesSNIAndShortID(t *testing.T) {
+	base := mkReality("h", 443, "eh1.vk.ru", "01ab")
+	sameSNIsameSID := mkReality("h", 443, "eh1.vk.ru", "01ab")
+	diffSNI := mkReality("h", 443, "io.ozone.ru", "01ab")
+	diffSID := mkReality("h", 443, "eh1.vk.ru", "02cd")
+
+	if extendedKey(base) != extendedKey(sameSNIsameSID) {
+		t.Error("identical (SNI,short_id) must yield identical extendedKey")
+	}
+	if extendedKey(base) == extendedKey(diffSNI) {
+		t.Error("different SNI must yield different extendedKey")
+	}
+	if extendedKey(base) == extendedKey(diffSID) {
+		t.Error("different short_id must yield different extendedKey")
+	}
+	if identityKey(base) != identityKey(diffSNI) {
+		t.Error("narrow identityKey must ignore SNI")
+	}
+}
+
 func TestIdentityHash_SubIDIndependent(t *testing.T) {
 	p := vlink.ParsedOutbound{Protocol: "vless", Server: "a.example", Port: 443, Outbound: []byte(`{"uuid":"u1"}`)}
 	h := IdentityHash(p)

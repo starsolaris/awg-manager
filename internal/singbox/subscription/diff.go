@@ -24,24 +24,36 @@ type TaggedOutbound struct {
 	Out vlink.ParsedOutbound
 }
 
-// StableTag derives a deterministic tag from server identity. Two refreshes
-// of the same provider produce the same tag for the same logical server.
-func StableTag(subID string, p vlink.ParsedOutbound) string {
+// suffixOf is the subID-independent tail of a tag: first 4 bytes of
+// sha256(key) as hex. It doubles as the exclusion key used by the import
+// preview, so preview suffixes and refresh tags share one derivation.
+func suffixOf(key string) string {
+	hash := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(hash[:4])
+}
+
+// stableTagFromKey builds the full tag from an already-chosen identity key.
+func stableTagFromKey(subID, key string) string {
 	subShort := subID
 	if len(subShort) > 8 {
 		subShort = subShort[:8]
 	}
-	identity := identityKey(p)
-	hash := sha256.Sum256([]byte(identity))
-	return "sub-" + subShort + "-" + hex.EncodeToString(hash[:4])
+	return "sub-" + subShort + "-" + suffixOf(key)
 }
 
-// IdentityHash returns the subID-independent suffix of StableTag: the first
-// 4 bytes of sha256(identityKey) as hex. Import-time exclusion keys members by
-// this hash because the full StableTag depends on the not-yet-allocated subID.
+// StableTag derives a deterministic tag from server identity (narrow key).
+// Two refreshes of the same provider produce the same tag for the same
+// logical server.
+func StableTag(subID string, p vlink.ParsedOutbound) string {
+	return stableTagFromKey(subID, identityKey(p))
+}
+
+// IdentityHash returns the subID-independent suffix of StableTag for the
+// narrow key: the first 4 bytes of sha256(identityKey) as hex. Import-time
+// exclusion keys members by this hash because the full StableTag depends on
+// the not-yet-allocated subID.
 func IdentityHash(p vlink.ParsedOutbound) string {
-	hash := sha256.Sum256([]byte(identityKey(p)))
-	return hex.EncodeToString(hash[:4])
+	return suffixOf(identityKey(p))
 }
 
 // identityKey builds the input for the stable hash: protocol + server +
@@ -57,6 +69,22 @@ func identityKey(p vlink.ParsedOutbound) string {
 		}
 	}
 	return p.Protocol + "|" + p.Server + "|" + itoa(p.Port) + "|" + cred
+}
+
+// extendedKey widens identityKey with the reality-masking fields that
+// distinguish endpoints sharing one server:port:credential — SNI and the
+// reality short_id. Used only for servers whose narrow key collides.
+func extendedKey(p vlink.ParsedOutbound) string {
+	var ob map[string]any
+	json.Unmarshal(p.Outbound, &ob)
+	sni, sid := "", ""
+	if tls, ok := ob["tls"].(map[string]any); ok {
+		sni, _ = tls["server_name"].(string)
+		if r, ok := tls["reality"].(map[string]any); ok {
+			sid, _ = r["short_id"].(string)
+		}
+	}
+	return identityKey(p) + "|" + sni + "|" + sid
 }
 
 func itoa(p uint16) string {
