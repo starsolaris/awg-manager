@@ -40,7 +40,7 @@
 		{
 			section: 'diagnostics',
 			href: '/diagnostics',
-			label: 'ДИАГНОСТИКА',
+			label: 'ИНСТРУМЕНТЫ',
 			matches: (p) => p.startsWith('/diagnostics') || p.startsWith('/logs'),
 		},
 		{
@@ -123,7 +123,7 @@
 			ТУННЕЛИ: 'Туннели',
 			СЕРВЕРЫ: 'Серверы',
 			МАРШРУТИЗАЦИЯ: 'Маршрутизация',
-			ДИАГНОСТИКА: 'Диагностика',
+			ИНСТРУМЕНТЫ: 'Инструменты',
 			НАСТРОЙКИ: 'Настройки',
 		};
 		return map[upperLabel] ?? upperLabel;

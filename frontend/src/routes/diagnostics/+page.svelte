@@ -156,13 +156,13 @@
 	});
 
 	const pageTitle = $derived(
-		activeTab === 'connections' ? 'Соединения · Диагностика' :
-		activeTab === 'checks' ? 'Проверки · Диагностика' :
-		activeTab === 'about' ? 'Окружение · Диагностика' :
-		activeTab === 'awgConfig' ? 'Конфиг AWG · Диагностика' :
-		activeTab === 'dns' ? 'Сведения о DNS · Диагностика' :
-		activeTab === 'monitoring' ? 'Мониторинг · Диагностика' :
-		'Журнал · Диагностика',
+		activeTab === 'connections' ? 'Соединения · Инструменты' :
+		activeTab === 'checks' ? 'Проверки · Инструменты' :
+		activeTab === 'about' ? 'Окружение · Инструменты' :
+		activeTab === 'awgConfig' ? 'Конфиг AWG · Инструменты' :
+		activeTab === 'dns' ? 'Сведения о DNS · Инструменты' :
+		activeTab === 'monitoring' ? 'Мониторинг · Инструменты' :
+		'Журнал · Инструменты',
 	);
 </script>
 
@@ -171,7 +171,7 @@
 </svelte:head>
 
 <PageContainer width="full">
-	<PageHeader title="Диагностика" />
+	<PageHeader title="Инструменты" />
 
 	<Tabs
 		tabs={diagnosticsTabs}

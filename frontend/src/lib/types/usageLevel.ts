@@ -114,7 +114,7 @@ export const SECTION_LABELS: Record<Section, string> = {
 	subscriptions: 'Подписки',
 	routing: 'Маршрутизация',
 	monitoring: 'Мониторинг',
-	diagnostics: 'Диагностика',
+	diagnostics: 'Инструменты',
 	settings: 'Настройки',
 	terminal: 'Терминал',
 };
