@@ -38,15 +38,6 @@
 			matches: (p) => p.startsWith('/routing'),
 		},
 		{
-			section: 'monitoring',
-			href: '/monitoring',
-			label: 'МОНИТОРИНГ',
-			matches: (p) =>
-				p.startsWith('/monitoring') ||
-				p.startsWith('/pingcheck') ||
-				p.startsWith('/connections'),
-		},
-		{
 			section: 'diagnostics',
 			href: '/diagnostics',
 			label: 'ДИАГНОСТИКА',
@@ -132,7 +123,6 @@
 			ТУННЕЛИ: 'Туннели',
 			СЕРВЕРЫ: 'Серверы',
 			МАРШРУТИЗАЦИЯ: 'Маршрутизация',
-			МОНИТОРИНГ: 'Мониторинг',
 			ДИАГНОСТИКА: 'Диагностика',
 			НАСТРОЙКИ: 'Настройки',
 		};

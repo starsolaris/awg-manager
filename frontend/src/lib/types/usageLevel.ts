@@ -100,12 +100,6 @@ export function pathToSection(pathname: string): Section | null {
 	if (pathname.startsWith('/servers')) return 'servers';
 	if (pathname.startsWith('/subscriptions')) return 'subscriptions';
 	if (pathname.startsWith('/routing')) return 'routing';
-	if (
-		pathname.startsWith('/monitoring') ||
-		pathname.startsWith('/pingcheck') ||
-		pathname.startsWith('/connections')
-	)
-		return 'monitoring';
 	if (pathname.startsWith('/diagnostics') || pathname.startsWith('/logs')) return 'diagnostics';
 	if (pathname.startsWith('/settings')) return 'settings';
 	if (pathname.startsWith('/terminal')) return 'terminal';
