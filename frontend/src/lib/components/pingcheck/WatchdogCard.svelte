@@ -118,6 +118,10 @@
 		border: 1px solid var(--color-border);
 		border-radius: 12px;
 		overflow: hidden;
+		/* Make the card a size container so the header can react to the CARD's
+		   width, not the viewport — cards sit in a 2-col grid, so a viewport
+		   media-query is the wrong signal (a 1000px viewport gives ~470px cards). */
+		container-type: inline-size;
 	}
 	.wd-card.recovering {
 		border-color: var(--color-warning-border);
@@ -155,7 +159,11 @@
 	}
 	.wd-status { margin-left: auto; }
 
-	@media (max-width: 640px) {
+	/* Stack name (row 1) above badges+status (row 2) once the card is too
+	   narrow for a comfortable single row. Threshold 460px = measured worst-case
+	   header width (~453px: longest name + NativeWG + AWG version + watchdog +
+	   «восстановление») + small headroom. */
+	@container (max-width: 460px) {
 		.wd-head {
 			flex-direction: column;
 			align-items: stretch;
